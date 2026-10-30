@@ -1,3 +1,7 @@
+> **Deprecated:** this is the frozen Python 2.x implementation. The default application is now the
+> Node.js/React 3.x implementation in the repository root. This tree is kept for one release for
+> reference and will be removed in 4.0.0.
+
 # Deezer Downloader 🎶 🎧 💃 🦄
 [![tests](https://github.com/kmille/deezer-downloader/actions/workflows/tests.yaml/badge.svg)](https://github.com/kmille/deezer-downloader/actions/workflows/tests.yaml)
 ![latest tag](https://img.shields.io/github/v/tag/kmille/deezer-downloader?sort=semver) ![Python 3.9](https://img.shields.io/badge/python-%3E=3.9-blue.svg) ![pypi-version](https://img.shields.io/pypi/v/deezer-downloader) ![pypi-downloads](https://img.shields.io/pypi/dm/deezer-downloader)
