@@ -8,7 +8,12 @@ import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
-import { Deezer403Exception, Deezer404Exception, DeezerClient } from '../src/deezer/client.js';
+import {
+  Deezer403Exception,
+  Deezer404Exception,
+  DeezerClient,
+  isDeezerShortLink,
+} from '../src/deezer/client.js';
 import type { DeezerSong } from '../src/deezer/types.js';
 
 const ARL = 'a'.repeat(192);
@@ -536,5 +541,25 @@ describe('DeezerClient session refresh', () => {
     await expect(client.getSongUrl('token')).rejects.toThrowError(/no sufficient rights/);
 
     expect(refresh.isDone()).toBe(false);
+  });
+});
+
+describe('isDeezerShortLink', () => {
+  it('accepts only real Deezer short-link hosts over https', () => {
+    expect(isDeezerShortLink('https://link.deezer.com/s/abc')).toBe(true);
+    expect(isDeezerShortLink('https://deezer.page.link/xyz')).toBe(true);
+    expect(isDeezerShortLink('https://evil.example/?link.deezer.com')).toBe(false);
+    expect(isDeezerShortLink('https://link.deezer.com.evil.example/')).toBe(false);
+    expect(isDeezerShortLink('http://link.deezer.com/s/abc')).toBe(false);
+    expect(isDeezerShortLink('link.deezer.com/s/abc')).toBe(false);
+    expect(isDeezerShortLink('12345')).toBe(false);
+  });
+
+  it('does not contact non-Deezer hosts that mention link.deezer.com', async () => {
+    const evil = nock('https://evil.example').head('/').query(true).reply(200);
+    await expect(
+      makeClient().parseDeezerPlaylist('https://evil.example/?link.deezer.com'),
+    ).rejects.toThrowError(/playlist id/);
+    expect(evil.isDone()).toBe(false);
   });
 });

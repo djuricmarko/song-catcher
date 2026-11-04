@@ -94,6 +94,21 @@ function isSessionError(error: unknown): boolean {
   );
 }
 
+const SHORT_LINK_HOSTS = new Set(['link.deezer.com', 'deezer.page.link']);
+
+/**
+ * Only real Deezer short-link hosts are followed; a substring match would let
+ * any URL containing "link.deezer.com" make the server send a request to it.
+ */
+export function isDeezerShortLink(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && SHORT_LINK_HOSTS.has(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /** Don't hammer Deezer when many songs fail for a reason a refresh can't fix. */
 const SESSION_REFRESH_INTERVAL_MS = 60_000;
 
@@ -478,7 +493,7 @@ export class DeezerClient {
   public async parseDeezerPlaylist(playlistIdOrUrl: string): Promise<PlaylistResult> {
     let value = playlistIdOrUrl.trim();
 
-    if (value.includes('link.deezer.com')) {
+    if (isDeezerShortLink(value)) {
       try {
         const response = await this.http.head(value, {
           followRedirect: true,
