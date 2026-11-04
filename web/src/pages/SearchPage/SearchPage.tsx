@@ -49,6 +49,9 @@ export function SearchPage() {
   const latestSearch = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  // Bumped on every play/pause so a late play() rejection for a preview the
+  // user has already paused or replaced is ignored.
+  const previewAttempt = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -69,16 +72,38 @@ export function SearchPage() {
     }
     const audio = audioRef.current;
     if (playingUrl === result.preview_url) {
+      previewAttempt.current++;
       audio.pause();
       setPlayingUrl(null);
       return;
     }
-    audio.src = result.preview_url;
-    void audio.play().catch(() => {
+    const url = result.preview_url;
+    audio.src = url;
+    setPlayingUrl(url);
+
+    // The first fetch of a preview that is cold on Deezer's CDN can make the
+    // initial play() reject even though the file is fine; one reload + retry
+    // succeeds. Rejections for a source the user has since switched away from
+    // (AbortError, or a newer play/pause) are ignored so they cannot clear the newly
+    // playing track or show a bogus error.
+    const attempt = ++previewAttempt.current;
+    const isCurrent = () => previewAttempt.current === attempt;
+    const fail = (error: unknown) => {
+      if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) {
+        return;
+      }
+      console.error('Preview playback failed', error);
       setPlayingUrl(null);
       toast.error('Could not play the preview');
+    };
+    audio.play().catch((error: unknown) => {
+      if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) {
+        return;
+      }
+      console.warn('Preview playback failed, retrying once', error);
+      audio.load();
+      audio.play().catch(fail);
     });
-    setPlayingUrl(result.preview_url);
   }
 
   async function runSearch(

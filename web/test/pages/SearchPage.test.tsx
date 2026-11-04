@@ -13,7 +13,12 @@ const config = (useMpd: boolean) => ({ version: '1', useMpd, urlPrefix: '' });
 class FakeAudio {
   static instances: FakeAudio[] = [];
   static failPlay = false;
+  /** Number of upcoming play() calls that reject before playback succeeds. */
+  static failNext = 0;
+  /** Pending play() promises, settled manually by the test when set. */
+  static deferred: Array<{ reject: (error: unknown) => void }> | null = null;
   src = '';
+  loads = 0;
   paused = true;
   private endedListeners: Array<() => void> = [];
   constructor() {
@@ -26,7 +31,20 @@ class FakeAudio {
   }
   play() {
     this.paused = false;
+    if (FakeAudio.deferred) {
+      const pending = FakeAudio.deferred;
+      return new Promise<void>((_resolve, reject) => {
+        pending.push({ reject });
+      });
+    }
+    if (FakeAudio.failNext > 0) {
+      FakeAudio.failNext--;
+      return Promise.reject(new Error('cold'));
+    }
     return FakeAudio.failPlay ? Promise.reject(new Error('blocked')) : Promise.resolve();
+  }
+  load() {
+    this.loads++;
   }
   pause() {
     this.paused = true;
@@ -100,6 +118,8 @@ async function findTileButton(name: string) {
 beforeEach(() => {
   FakeAudio.instances = [];
   FakeAudio.failPlay = false;
+  FakeAudio.failNext = 0;
+  FakeAudio.deferred = null;
   vi.stubGlobal('Audio', FakeAudio);
   vi.spyOn(toast, 'success');
   vi.spyOn(toast, 'error');
@@ -431,6 +451,39 @@ describe('SearchPage previews', () => {
       expect(toast.error).toHaveBeenCalledWith('Could not play the preview');
     });
     expect(screen.getByRole('button', { name: 'Play preview of One' })).toBeInTheDocument();
+  });
+
+  it('retries once when the first play attempt fails', async () => {
+    FakeAudio.failNext = 1;
+    mockSearch(() => [makeResult({ title: 'One', preview_url: 'https://p/1' })]);
+    renderWithProviders(<SearchPage />);
+    await search('x');
+    await userEvent.click(await screen.findByRole('button', { name: 'Play preview of One' }));
+    const audio = FakeAudio.instances[0] as FakeAudio;
+    await waitFor(() => {
+      expect(audio.loads).toBe(1);
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Pause preview of One' })).toBeInTheDocument();
+  });
+
+  it('ignores failures from a preview that was already replaced', async () => {
+    const pending: Array<{ reject: (error: unknown) => void }> = [];
+    FakeAudio.deferred = pending;
+    mockSearch(() => [
+      makeResult({ id: '1', title: 'One', preview_url: 'https://p/1' }),
+      makeResult({ id: '2', title: 'Two', preview_url: 'https://p/2' }),
+    ]);
+    renderWithProviders(<SearchPage />);
+    await search('x');
+    await userEvent.click(await screen.findByRole('button', { name: 'Play preview of One' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Play preview of Two' }));
+    await act(async () => {
+      pending[0]?.reject(new Error('interrupted'));
+      await Promise.resolve();
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Pause preview of Two' })).toBeInTheDocument();
   });
 
   it('plays previews from an album tracklist', async () => {
