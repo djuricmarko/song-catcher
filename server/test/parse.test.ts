@@ -26,6 +26,24 @@ describe('extractAppState', () => {
     expect(extractAppState(html)?.DATA?.__TYPE__).toBe('song');
   });
 
+  it('handles an assignment with trailing code on the same line', () => {
+    const html = `<html><script>window.__DZR_APP_STATE__ = {"DATA":{"__TYPE__":"song","SNG_TITLE":"a } \\" { b"}};window.other = 1;</script></html>`;
+
+    const state = extractAppState(html);
+    expect(state?.DATA?.__TYPE__).toBe('song');
+    expect(state?.DATA?.SNG_TITLE).toBe('a } " { b');
+  });
+
+  it('handles pretty-printed state spanning multiple lines', () => {
+    const html = `<html><script>
+      window.__DZR_APP_STATE__ = {"DATA":
+        {"__TYPE__": "album"}
+      }
+    </script></html>`;
+
+    expect(extractAppState(html)?.DATA?.__TYPE__).toBe('album');
+  });
+
   it('returns undefined when no state is present', () => {
     expect(extractAppState('<html></html>')).toBeUndefined();
   });

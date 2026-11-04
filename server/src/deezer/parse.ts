@@ -60,9 +60,39 @@ export function apiErrorText(error: DeezerApiError | string | undefined): string
 }
 
 /**
- * Deezer embeds the page state in an inline script. The script is not pure JSON
- * in every response, so try each script that starts with {"DATA": and ignore
- * parse failures.
+ * Returns the balanced JSON object starting at `start` (which must be `{`),
+ * honouring strings and escapes, or undefined if it never closes.
+ */
+function balancedObject(text: string, start: number): string | undefined {
+  let depth = 0;
+  let inString = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (character === '\\') {
+        index += 1;
+      } else if (character === '"') {
+        inString = false;
+      }
+    } else if (character === '"') {
+      inString = true;
+    } else if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Deezer embeds the page state in an inline script, typically as
+ * `window.__DZR_APP_STATE__ = {"DATA":...};` possibly followed by more code.
+ * Extract just the balanced object after each `{"DATA":` and ignore
+ * candidates that fail to parse.
  */
 export function extractAppState(html: string): DeezerAppState | undefined {
   const $ = load(html);
@@ -71,17 +101,19 @@ export function extractAppState(html: string): DeezerAppState | undefined {
     .get();
 
   for (const script of scripts) {
-    const match = /\{"DATA":.*/.exec(script);
-    if (!match) {
-      continue;
-    }
-    try {
-      const state = JSON.parse(match[0]) as DeezerAppState;
-      if (state.DATA) {
-        return state;
+    for (let start = script.indexOf('{"DATA":'); start !== -1;) {
+      const candidate = balancedObject(script, start);
+      if (candidate) {
+        try {
+          const state = JSON.parse(candidate) as DeezerAppState;
+          if (state.DATA) {
+            return state;
+          }
+        } catch {
+          // Not valid JSON; try the next occurrence.
+        }
       }
-    } catch {
-      // Deezer sometimes appends non-JSON content to the script. Try the next one.
+      start = script.indexOf('{"DATA":', start + 1);
     }
   }
 
