@@ -64,7 +64,7 @@ async function run(options: CliOptions): Promise<void> {
 }
 
 const program = new Command()
-  .name('deezer-downloader')
+  .name('song-catcher')
   .description('Download music from Deezer and YouTube with a React frontend.')
   .version(VERSION, '--version', 'show version and exit')
   .option('--print-config', 'print the resolved configuration with secrets redacted and exit')

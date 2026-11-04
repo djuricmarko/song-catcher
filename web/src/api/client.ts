@@ -5,7 +5,7 @@ import type {
   QueueTask,
   SearchResultDto,
   TaskAcceptedResponse,
-} from '@deezer-downloader/shared';
+} from '@song-catcher/shared';
 
 interface RuntimeConfig {
   apiRoot?: string;

@@ -1,6 +1,6 @@
 import { Disc3, Download, ListMusic, Pause, Play, User } from 'lucide-react';
 
-import type { SearchResultDto } from '@deezer-downloader/shared';
+import type { SearchResultDto } from '@song-catcher/shared';
 
 import { cn } from '../../lib/cn';
 import { Button } from '../ui/Button';

@@ -1,6 +1,6 @@
 {
-  "name": "Deezer Downloader",
-  "short_name": "Deezer dl",
+  "name": "Song Catcher",
+  "short_name": "Song Catcher",
   "description": "Search Deezer, rip video audio and grab playlists into your own library.",
   "start_url": "./",
   "scope": "./",

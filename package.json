@@ -1,5 +1,5 @@
 {
-  "name": "deezer-downloader",
+  "name": "song-catcher",
   "version": "3.0.0",
   "private": true,
   "type": "module",
@@ -13,9 +13,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "build:shared": "npm run build -w @deezer-downloader/shared",
-    "dev:server": "npm run build:shared && npm run dev -w @deezer-downloader/server",
-    "dev:web": "npm run build:shared && npm run dev -w @deezer-downloader/web",
+    "build:shared": "npm run build -w @song-catcher/shared",
+    "dev:server": "npm run build:shared && npm run dev -w @song-catcher/server",
+    "dev:web": "npm run build:shared && npm run dev -w @song-catcher/web",
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",

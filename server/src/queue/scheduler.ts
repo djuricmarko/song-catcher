@@ -1,4 +1,4 @@
-import type { QueueTask, TaskState } from '@deezer-downloader/shared';
+import type { QueueTask, TaskState } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
 export interface TaskContext {

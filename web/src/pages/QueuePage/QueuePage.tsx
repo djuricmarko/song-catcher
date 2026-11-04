@@ -3,7 +3,7 @@ import { Progress } from '@base-ui/react/progress';
 import { ChevronRight, FileAudio } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import type { QueueTask, TaskState } from '@deezer-downloader/shared';
+import type { QueueTask, TaskState } from '@song-catcher/shared';
 
 import { Alert } from '../../components/Alert';
 import { EmptyState } from '../../components/EmptyState';

@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, Download, Search } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
-import type { SearchResultDto } from '@deezer-downloader/shared';
+import type { SearchResultDto } from '@song-catcher/shared';
 
 import { searchMusic, startDownload } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';

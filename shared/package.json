@@ -1,5 +1,5 @@
 {
-  "name": "@deezer-downloader/shared",
+  "name": "@song-catcher/shared",
   "version": "3.0.0",
   "private": true,
   "type": "module",

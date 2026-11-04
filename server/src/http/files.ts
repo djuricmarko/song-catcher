@@ -1,7 +1,7 @@
 import { readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { FileEntry, FilesResponse } from '@deezer-downloader/shared';
+import type { FileEntry, FilesResponse } from '@song-catcher/shared';
 
 import { isPathInside } from '../config/env.js';
 

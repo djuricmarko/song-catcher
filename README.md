@@ -1,4 +1,4 @@
-# Deezer Downloader 3
+# Song Catcher
 
 A self-hosted web app for downloading music from Deezer and YouTube. The 3.x release is a full
 rewrite: a TypeScript/Fastify backend and a React single-page frontend. Spotify support has been
@@ -123,10 +123,10 @@ for the new file to be indexed, and adds it to the current playlist when request
 ## CLI
 
 ```bash
-deezer-downloader --version
-deezer-downloader --print-config
-deezer-downloader --check
-deezer-downloader
+song-catcher --version
+song-catcher --print-config
+song-catcher --check
+song-catcher
 ```
 
 - `--version` prints the application version.
@@ -137,13 +137,13 @@ deezer-downloader
 ## Docker
 
 ```bash
-docker build -t deezer-downloader .
+docker build -t song-catcher .
 
 mkdir -p downloads
 docker run --rm -p 5000:5000 \
   -v "$(pwd)/downloads:/mnt/deezer-downloader" \
   -e DEEZER_COOKIE_ARL=your_arl_cookie \
-  deezer-downloader
+  song-catcher
 ```
 
 The image runs as a non-root user, includes `ffmpeg`, `flac` and `yt-dlp`, and stores downloads in

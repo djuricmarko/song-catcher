@@ -1,4 +1,4 @@
-import type { TaskState } from '@deezer-downloader/shared';
+import type { TaskState } from '@song-catcher/shared';
 
 import { cn } from '../../lib/cn';
 

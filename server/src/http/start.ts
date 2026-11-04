@@ -19,7 +19,7 @@ export async function startServer(config: AppConfig, logger: Logger) {
       urlPrefix: config.http.urlPrefix || '/',
       version: VERSION,
     },
-    'deezer-downloader listening',
+    'song-catcher listening',
   );
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {

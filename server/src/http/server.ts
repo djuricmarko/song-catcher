@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import fastifyStatic from '@fastify/static';
-import type { ApiConfigResponse, ApiErrorResponse, HealthResponse } from '@deezer-downloader/shared';
+import type { ApiConfigResponse, ApiErrorResponse, HealthResponse } from '@song-catcher/shared';
 import Fastify, { type FastifyError } from 'fastify';
 import type { Logger } from 'pino';
 
@@ -69,10 +69,7 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
       }
       if (!checkBasicAuth(request.headers.authorization, auth)) {
         const body: ApiErrorResponse = { error: 'authentication required' };
-        return reply
-          .code(401)
-          .header('WWW-Authenticate', 'Basic realm="deezer-downloader", charset="UTF-8"')
-          .send(body);
+        return reply.code(401).header('WWW-Authenticate', 'Basic realm="song-catcher", charset="UTF-8"').send(body);
       }
     });
   }

@@ -32,12 +32,12 @@ RUN apk add --no-cache ffmpeg flac yt-dlp \
 WORKDIR /app
 
 # Install only production dependencies. Workspace symlinks are preserved so
-# @deezer-downloader/shared resolves to /app/shared at runtime.
+# @song-catcher/shared resolves to /app/shared at runtime.
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
-RUN npm ci --omit=dev --workspace @deezer-downloader/server \
+RUN npm ci --omit=dev --workspace @song-catcher/server \
     && npm cache clean --force
 
 COPY --from=build /app/shared/dist ./shared/dist

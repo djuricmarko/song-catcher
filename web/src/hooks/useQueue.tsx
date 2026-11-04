@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-import type { QueueTask } from '@deezer-downloader/shared';
+import type { QueueTask } from '@song-catcher/shared';
 
 import { API_ROOT, getQueue } from '../api/client';
 

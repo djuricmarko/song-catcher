@@ -83,7 +83,7 @@ export default function App() {
           </span>
           <div className={styles.brandText}>
             <p className={styles.appName}>
-              Deezer<span>dl</span>
+              Song<span>catcher</span>
             </p>
             <p className={styles.version}>{config.data ? `v${config.data.version}` : '—'}</p>
           </div>
@@ -127,7 +127,7 @@ export default function App() {
             <Disc3 size={16} strokeWidth={1.75} />
           </span>
           <p className={styles.appName}>
-            Deezer<span>dl</span>
+            Song<span>catcher</span>
           </p>
         </div>
         <div className={styles.topbarActions}>

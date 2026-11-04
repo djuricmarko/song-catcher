@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import type { ApiErrorResponse, DebugResponse, QueueTask, TaskAcceptedResponse } from '@deezer-downloader/shared';
+import type { ApiErrorResponse, DebugResponse, QueueTask, TaskAcceptedResponse } from '@song-catcher/shared';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, RawServerDefault } from 'fastify';
 import type { Logger } from 'pino';
 import { z, type ZodType } from 'zod';

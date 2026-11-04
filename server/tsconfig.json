@@ -3,7 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@deezer-downloader/shared": ["../shared/src/index.ts"]
+      "@song-catcher/shared": ["../shared/src/index.ts"]
     },
     "types": ["node"]
   },

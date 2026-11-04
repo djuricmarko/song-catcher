@@ -1,10 +1,10 @@
 {
-  "name": "@deezer-downloader/server",
+  "name": "@song-catcher/server",
   "version": "3.0.0",
   "private": true,
   "type": "module",
   "bin": {
-    "deezer-downloader": "./dist/cli.js"
+    "song-catcher": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@deezer-downloader/shared": "*",
+    "@song-catcher/shared": "*",
     "@fastify/static": "^10.1.7",
     "archiver": "^7.0.1",
     "cheerio": "^1.2.0",
