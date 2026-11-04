@@ -39,6 +39,8 @@ const GW_LIGHT_URL = 'https://www.deezer.com/ajax/gw-light.php';
 const USER_DATA_URL = `${GW_LIGHT_URL}?method=deezer.getUserData&input=3&api_version=1.0&api_token=`;
 const MEDIA_URL = 'https://media.deezer.com/v1/get_url';
 const COVER_BASE = 'https://e-cdns-images.dzcdn.net/images/cover';
+/** Covers are ~100-300 KB; keep enough for a few albums being downloaded in parallel. */
+const PICTURE_CACHE_SIZE = 16;
 
 export type SoundFormat = 'FLAC' | 'MP3_320' | 'MP3_128';
 
@@ -125,6 +127,7 @@ export class DeezerClient {
   private licenseToken = '';
   private soundFormat: SoundFormat = 'MP3_128';
   private initialized = false;
+  private readonly pictureCache = new Map<string, Promise<Buffer | undefined>>();
 
   public constructor(
     private readonly config: AppConfig,
@@ -592,10 +595,12 @@ export class DeezerClient {
       );
     }
 
+    // A missing cover must not prevent the title/artist/album tags.
+    const picture = await this.getCachedPicture(resolvedSong.ALB_PICTURE);
     try {
       await writeSongMetadata(outputFile, resolvedSong, {
         isFlac: this.fileExtension === 'flac',
-        picture: await this.downloadPicture(resolvedSong.ALB_PICTURE),
+        picture,
         metaflacPath: this.config.tools.metaflacPath,
       });
     } catch (error) {
@@ -606,6 +611,39 @@ export class DeezerClient {
     }
 
     this.logger.info({ file: outputFile, songId: resolvedSong.SNG_ID }, 'download finished');
+  }
+
+  /**
+   * Returns the album cover, or undefined if it cannot be downloaded. Covers
+   * are cached by picture id so an album fetches its cover only once; the
+   * in-flight promise is cached so concurrent workers share one request.
+   */
+  private getCachedPicture(pictureId: string | undefined): Promise<Buffer | undefined> {
+    if (!pictureId) {
+      return Promise.resolve(undefined);
+    }
+    const cached = this.pictureCache.get(pictureId);
+    if (cached) {
+      // Refresh recency for LRU eviction.
+      this.pictureCache.delete(pictureId);
+      this.pictureCache.set(pictureId, cached);
+      return cached;
+    }
+
+    const pending = this.downloadPicture(pictureId).catch((error: unknown) => {
+      this.pictureCache.delete(pictureId);
+      this.logger.warn({ err: error, pictureId }, 'could not download cover; tagging without it');
+      return undefined;
+    });
+    this.pictureCache.set(pictureId, pending);
+    while (this.pictureCache.size > PICTURE_CACHE_SIZE) {
+      const oldest = this.pictureCache.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.pictureCache.delete(oldest);
+    }
+    return pending;
   }
 
   public async downloadPicture(pictureId: string): Promise<Buffer> {

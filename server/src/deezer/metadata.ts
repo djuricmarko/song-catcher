@@ -18,7 +18,8 @@ function childEnvironment(): NodeJS.ProcessEnv {
 
 export interface MetadataOptions {
   isFlac: boolean;
-  picture: Buffer;
+  /** Front cover; omitted when it could not be downloaded. */
+  picture?: Buffer;
   metaflacPath: string;
 }
 
@@ -66,12 +67,16 @@ async function writeMp3Metadata(
     partOfSet: nonEmpty(song.DISK_NUMBER),
     performerInfo: nonEmpty(song.ALB_ART_NAME || song.ART_NAME),
     year: releaseYear(song),
-    image: {
-      mime: 'image/jpeg',
-      type: { id: 3, name: 'front cover' },
-      description: 'Cover',
-      imageBuffer: options.picture,
-    },
+    ...(options.picture
+      ? {
+          image: {
+            mime: 'image/jpeg',
+            type: { id: 3, name: 'front cover' },
+            description: 'Cover',
+            imageBuffer: options.picture,
+          },
+        }
+      : {}),
   };
 
   try {
@@ -94,12 +99,11 @@ async function writeFlacMetadata(
   song: DeezerSong,
   options: MetadataOptions,
 ): Promise<void> {
-  const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'deezer-cover-'));
-  const coverPath = path.join(temporaryDirectory, 'cover.jpg');
+  const temporaryDirectory = options.picture
+    ? await mkdtemp(path.join(tmpdir(), 'deezer-cover-'))
+    : undefined;
 
   try {
-    await writeFile(coverPath, options.picture);
-
     const tags: Array<[string, string | undefined]> = [
       ['ARTIST', nonEmpty(song.ART_NAME)],
       ['TITLE', nonEmpty(song.SNG_TITLE)],
@@ -116,7 +120,12 @@ async function writeFlacMetadata(
         args.push(`--set-tag=${key}=${value}`);
       }
     }
-    args.push(`--import-picture-from=${coverPath}`, outputFile);
+    if (temporaryDirectory && options.picture) {
+      const coverPath = path.join(temporaryDirectory, 'cover.jpg');
+      await writeFile(coverPath, options.picture);
+      args.push(`--import-picture-from=${coverPath}`);
+    }
+    args.push(outputFile);
 
     try {
       await execFileAsync(options.metaflacPath, args, {
@@ -134,6 +143,8 @@ async function writeFlacMetadata(
       );
     }
   } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined);
+    if (temporaryDirectory) {
+      await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }

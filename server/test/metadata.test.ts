@@ -115,4 +115,25 @@ describe('writeSongMetadata', () => {
     const pictures = await execFileAsync('metaflac', ['--list', '--block-type=PICTURE', output]);
     expect(pictures.stdout).toContain('type: 3 (Cover (front))');
   });
+
+  it('writes MP3 tags without a cover', async () => {
+    const output = await makeAudio('nocover.mp3', 'libmp3lame');
+
+    await writeSongMetadata(output, song, { isFlac: false, metaflacPath: 'metaflac' });
+
+    const tags = await NodeID3.Promise.read(output);
+    expect(tags.title).toBe('Test Song');
+    expect(tags.image).toBeFalsy();
+  });
+
+  it('writes FLAC tags without a cover', async () => {
+    const output = await makeAudio('nocover.flac', 'flac');
+
+    await writeSongMetadata(output, song, { isFlac: true, metaflacPath: 'metaflac' });
+
+    const { stdout } = await execFileAsync('metaflac', ['--export-tags-to=-', output]);
+    expect(stdout).toContain('TITLE=Test Song');
+    const pictures = await execFileAsync('metaflac', ['--list', '--block-type=PICTURE', output]);
+    expect(pictures.stdout).toBe('');
+  });
 });

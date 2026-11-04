@@ -1,9 +1,15 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import nock from 'nock';
+import NodeID3 from 'node-id3';
 import pino from 'pino';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
 import { Deezer403Exception, Deezer404Exception, DeezerClient } from '../src/deezer/client.js';
+import type { DeezerSong } from '../src/deezer/types.js';
 
 const ARL = 'a'.repeat(192);
 const logger = pino({ level: 'silent' });
@@ -17,6 +23,11 @@ function makeClient(): DeezerClient {
     },
     { cwd: '/tmp' },
   );
+  return new DeezerClient(config, logger);
+}
+
+function makeMp3Client(): DeezerClient {
+  const config = loadConfig({ DEEZER_COOKIE_ARL: ARL, DEEZER_QUALITY: 'mp3' }, { cwd: '/tmp' });
   return new DeezerClient(config, logger);
 }
 
@@ -283,5 +294,87 @@ describe('DeezerClient playlist and favorites', () => {
     await client.init();
     const url = await client.getSongUrl('track-token');
     expect(url).toBe('https://cdn/song.mp3');
+  });
+});
+
+describe('DeezerClient.downloadSong', () => {
+  let directory: string;
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), 'deezer-download-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  function mockInit(): void {
+    nock('https://www.deezer.com')
+      .get('/ajax/gw-light.php')
+      .query(userDataUrl)
+      .reply(200, {
+        results: {
+          USER: {
+            OPTIONS: { license_token: 'license', web_sound_quality: { lossless: false } },
+          },
+        },
+      });
+  }
+
+  function mockSong(times: number): void {
+    nock('https://media.deezer.com')
+      .post('/v1/get_url')
+      .times(times)
+      .reply(200, { data: [{ media: [{ sources: [{ url: 'https://cdn.test/song' }] }] }] });
+    // Shorter than one 2048-byte block, so it passes through the decryptor unchanged.
+    nock('https://cdn.test').get('/song').times(times).reply(200, 'audio');
+  }
+
+  const downloadable: DeezerSong = {
+    SNG_ID: '42',
+    SNG_TITLE: 'Title',
+    ART_NAME: 'Artist',
+    ALB_TITLE: 'Album',
+    ALB_PICTURE: 'pic',
+    TRACK_TOKEN: 'token',
+    MD5_ORIGIN: 'origin',
+  };
+
+  it('still writes tags when the cover cannot be downloaded', async () => {
+    mockInit();
+    mockSong(1);
+    nock('https://e-cdns-images.dzcdn.net').get('/images/cover/pic/1200x1200.jpg').reply(500);
+
+    const client = makeMp3Client();
+    await client.init();
+    const output = path.join(directory, 'song.mp3');
+    await client.downloadSong(downloadable, output);
+
+    const tags = await NodeID3.Promise.read(output);
+    expect(tags.title).toBe('Title');
+    expect(tags.artist).toBe('Artist');
+    expect(tags.image).toBeFalsy();
+  });
+
+  it('downloads a shared album cover only once', async () => {
+    mockInit();
+    mockSong(2);
+    const cover = nock('https://e-cdns-images.dzcdn.net')
+      .get('/images/cover/pic/1200x1200.jpg')
+      .once()
+      .reply(200, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    const client = makeMp3Client();
+    await client.init();
+    const first = path.join(directory, 'one.mp3');
+    const second = path.join(directory, 'two.mp3');
+    await Promise.all([
+      client.downloadSong(downloadable, first),
+      client.downloadSong({ ...downloadable, SNG_ID: '43' }, second),
+    ]);
+
+    expect(cover.isDone()).toBe(true);
+    expect((await NodeID3.Promise.read(first)).image).toBeTruthy();
+    expect((await NodeID3.Promise.read(second)).image).toBeTruthy();
   });
 });
