@@ -36,6 +36,27 @@ describe('Scheduler', () => {
     await scheduler.stop();
   });
 
+  it('never runs a task twice when several are enqueued in the same tick', async () => {
+    const scheduler = new Scheduler(3, 10, logger);
+    const runs: number[] = [];
+    scheduler.register('record', async (args) => {
+      runs.push(Number(args.value));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return [];
+    });
+    scheduler.start();
+    // Let every worker park itself waiting for work.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const tasks = [1, 2, 3].map((value) => scheduler.enqueue('record', 'record', { value }));
+    await Promise.all(tasks.map((task) => waitForTask(scheduler, task.id)));
+
+    expect(runs.sort()).toEqual([1, 2, 3]);
+    expect(new Set(scheduler.getTasks().map((task) => task.workerIndex)).size).toBe(3);
+
+    await scheduler.stop();
+  });
+
   it('reports progress', async () => {
     const scheduler = new Scheduler(1, 10, logger);
     const progressEvents: Array<[number, number]> = [];

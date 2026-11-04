@@ -126,10 +126,18 @@ export class Scheduler {
     wake?.();
   }
 
-  private async nextTask(): Promise<InternalTask | undefined> {
+  /**
+   * Finds the next waiting task and claims it synchronously. Claiming must
+   * happen before any `await`, otherwise two workers woken in the same tick
+   * can both pick the same task.
+   */
+  private async nextTask(workerIndex: number): Promise<InternalTask | undefined> {
     while (!this.stopRequested) {
       const task = this.tasks.find((candidate) => candidate.state === 'waiting');
       if (task) {
+        task.state = 'active';
+        task.workerIndex = workerIndex;
+        task.tsStarted = Date.now();
         return task;
       }
       await new Promise<void>((resolve) => {
@@ -141,14 +149,11 @@ export class Scheduler {
 
   private async workerLoop(workerIndex: number): Promise<void> {
     while (!this.stopRequested) {
-      const task = await this.nextTask();
+      const task = await this.nextTask(workerIndex);
       if (!task) {
         return;
       }
 
-      task.state = 'active';
-      task.workerIndex = workerIndex;
-      task.tsStarted = Date.now();
       this.notify(task);
 
       const handler = this.handlers.get(task.handlerName);
