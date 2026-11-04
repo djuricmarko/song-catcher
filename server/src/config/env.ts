@@ -374,14 +374,33 @@ export async function checkEnvironment(config: AppConfig): Promise<EnvironmentRe
     metaflac: resolveExecutable(config.tools.metaflacPath),
   };
 
-  const toolVariables: Array<[ToolName, string, string]> = [
-    ['ytDlp', 'DEEZER_YTDLP_PATH', config.tools.ytdlpPath],
-    ['ffmpeg', 'DEEZER_FFMPEG_PATH', config.tools.ffmpegPath],
-    ['metaflac', 'DEEZER_METAFLAC_PATH', config.tools.metaflacPath],
+  // Only metaflac is essential, and only for FLAC; the others merely disable
+  // YouTube downloads, so they should not stop the server from starting.
+  const toolVariables: Array<[ToolName, string, string, boolean, string]> = [
+    ['ytDlp', 'DEEZER_YTDLP_PATH', config.tools.ytdlpPath, false, 'YouTube downloads will fail'],
+    [
+      'ffmpeg',
+      'DEEZER_FFMPEG_PATH',
+      config.tools.ffmpegPath,
+      false,
+      'YouTube audio extraction will fail',
+    ],
+    [
+      'metaflac',
+      'DEEZER_METAFLAC_PATH',
+      config.tools.metaflacPath,
+      config.deezer.quality === 'flac',
+      'FLAC files cannot be tagged',
+    ],
   ];
-  for (const [tool, variable, command] of toolVariables) {
-    if (!tools[tool]) {
+  for (const [tool, variable, command, required, consequence] of toolVariables) {
+    if (tools[tool]) {
+      continue;
+    }
+    if (required) {
       errors.push(`${variable}: executable not found: ${command}`);
+    } else {
+      warnings.push(`${variable}: executable not found: ${command} (${consequence})`);
     }
   }
 

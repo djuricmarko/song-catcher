@@ -287,8 +287,28 @@ describe('checkEnvironment', () => {
 
     const report = await checkEnvironment(config);
 
-    expect(report.errors).toEqual([
-      'DEEZER_YTDLP_PATH: executable not found: /definitely/not/here',
+    expect(report.errors).toEqual([]);
+    expect(report.warnings).toContain(
+      'DEEZER_YTDLP_PATH: executable not found: /definitely/not/here (YouTube downloads will fail)',
+    );
+  });
+
+  it('requires metaflac only for FLAC quality', async () => {
+    const directory = await makeTempDirectory();
+    const env = {
+      DEEZER_DOWNLOAD_DIR: directory,
+      DEEZER_YTDLP_PATH: process.execPath,
+      DEEZER_FFMPEG_PATH: process.execPath,
+      DEEZER_METAFLAC_PATH: '/definitely/not/here',
+    };
+
+    const mp3 = await checkEnvironment(load({ ...env, DEEZER_QUALITY: 'mp3' }));
+    expect(mp3.errors).toEqual([]);
+    expect(mp3.warnings.join('\n')).toMatch(/FLAC files cannot be tagged/);
+
+    const flac = await checkEnvironment(load({ ...env, DEEZER_QUALITY: 'flac' }));
+    expect(flac.errors).toEqual([
+      'DEEZER_METAFLAC_PATH: executable not found: /definitely/not/here',
     ]);
   });
 });
