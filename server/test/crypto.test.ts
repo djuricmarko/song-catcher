@@ -4,7 +4,9 @@ import { buffer as consumeBuffer } from 'node:stream/consumers';
 
 import { describe, expect, it } from 'vitest';
 
-import { BLOCK_SIZE, calcBfKey, createDecryptTransform, decryptBlock } from '../src/deezer/crypto.js';
+import { Blowfish } from 'egoroof-blowfish';
+
+import { BLOCK_SIZE, BLOWFISH_IV, calcBfKey, createDecryptTransform, decryptBlock } from '../src/deezer/crypto.js';
 
 const cipherBlock = Buffer.from(
   readFileSync(new URL('./fixtures/block-2048.b64', import.meta.url), 'utf8').trim(),
@@ -24,6 +26,20 @@ describe('decryptBlock', () => {
 
     expect(plaintext).toHaveLength(BLOCK_SIZE);
     expect(plaintext.every((byte) => byte === 0x41)).toBe(true);
+  });
+
+  it('preserves binary data and trailing zero bytes', () => {
+    // Non-ASCII bytes break a UTF-8 round trip; trailing zeros break NULL unpadding.
+    const plaintext = Buffer.alloc(BLOCK_SIZE);
+    for (let index = 0; index < BLOCK_SIZE - 16; index += 1) {
+      plaintext[index] = (index * 37 + 0x80) & 0xff;
+    }
+    const blowfish = new Blowfish(key, Blowfish.MODE.CBC, Blowfish.PADDING.NULL);
+    blowfish.setIv(BLOWFISH_IV);
+    const ciphertext = Buffer.from(blowfish.encode(plaintext));
+
+    expect(ciphertext).toHaveLength(BLOCK_SIZE);
+    expect(decryptBlock(ciphertext, key).equals(plaintext)).toBe(true);
   });
 });
 

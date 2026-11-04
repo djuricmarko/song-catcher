@@ -52,16 +52,34 @@ export function isNativeBlowfishAvailable(): boolean {
   return USE_NATIVE_BLOWFISH;
 }
 
-export function decryptBlock(block: Buffer, key: Buffer): Buffer {
+/**
+ * Returns a function that decrypts 2048-byte blocks with the given key. The
+ * pure-JS fallback is built once per key because its key schedule is costly.
+ */
+export function createBlockDecryptor(key: Buffer): (block: Buffer) => Buffer {
   if (USE_NATIVE_BLOWFISH) {
-    const decipher = createDecipheriv('bf-cbc', key, BLOWFISH_IV);
-    decipher.setAutoPadding(false);
-    return decipher.update(block);
+    return (block) => {
+      const decipher = createDecipheriv('bf-cbc', key, BLOWFISH_IV);
+      decipher.setAutoPadding(false);
+      return decipher.update(block);
+    };
   }
 
   const blowfish = new Blowfish(key, Blowfish.MODE.CBC, Blowfish.PADDING.NULL);
   blowfish.setIv(BLOWFISH_IV);
-  return Buffer.from(blowfish.decode(block));
+  // egoroof-blowfish has no "no padding" mode: NULL padding strips trailing
+  // zero bytes from the last 8-byte unit. Append a throwaway unit so only that
+  // gets stripped, then cut the result back to the block length. Note that
+  // decode() returns a UTF-8 string unless UINT8_ARRAY is passed explicitly.
+  const sacrificial = Buffer.alloc(8, 0xff);
+  return (block) => {
+    const decoded = blowfish.decode(Buffer.concat([block, sacrificial]), Blowfish.TYPE.UINT8_ARRAY);
+    return Buffer.from(decoded.buffer, decoded.byteOffset, block.length);
+  };
+}
+
+export function decryptBlock(block: Buffer, key: Buffer): Buffer {
+  return createBlockDecryptor(key)(block);
 }
 
 /**
@@ -72,6 +90,7 @@ export function decryptBlock(block: Buffer, key: Buffer): Buffer {
 export function createDecryptTransform(key: Buffer): Transform {
   let remainder = Buffer.alloc(0);
   let blockIndex = 0;
+  const decrypt = createBlockDecryptor(key);
 
   return new Transform({
     transform(chunk: Buffer, _encoding, callback) {
@@ -81,7 +100,7 @@ export function createDecryptTransform(key: Buffer): Transform {
       while (remainder.length >= BLOCK_SIZE) {
         const block = remainder.subarray(0, BLOCK_SIZE);
         remainder = remainder.subarray(BLOCK_SIZE);
-        output.push(blockIndex % 3 === 0 ? decryptBlock(block, key) : block);
+        output.push(blockIndex % 3 === 0 ? decrypt(block) : block);
         blockIndex += 1;
       }
 
