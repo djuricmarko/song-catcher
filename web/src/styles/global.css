@@ -249,11 +249,22 @@ body::after {
   }
 }
 
-/* Toasts (sonner) */
-[data-sonner-toaster] {
+/* Toasts (sonner). sonner appends its own stylesheet at runtime, so these
+   selectors carry extra specificity to win over its per-theme defaults. */
+:root [data-sonner-toaster][data-sonner-theme] {
   --normal-bg: var(--surface-raised);
   --normal-border: var(--line);
   --normal-text: var(--ink);
   --border-radius: var(--radius-md);
   font-family: var(--font-sans);
+}
+
+/* Rich colors: green for success, red for errors. */
+:root [data-sonner-toaster][data-sonner-theme] {
+  --success-bg: color-mix(in oklab, var(--ok) 14%, var(--surface-raised));
+  --success-border: color-mix(in oklab, var(--ok) 40%, var(--surface-raised));
+  --success-text: var(--ok);
+  --error-bg: color-mix(in oklab, var(--bad) 12%, var(--surface-raised));
+  --error-border: color-mix(in oklab, var(--bad) 40%, var(--surface-raised));
+  --error-text: var(--bad);
 }
