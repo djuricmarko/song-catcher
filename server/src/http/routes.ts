@@ -256,9 +256,14 @@ export async function registerApiRoutes(
 
     eventStreams.add(reply.raw);
     writeEvent('snapshot', services.scheduler.getTasks());
-    const unsubscribe = services.scheduler.subscribe((task) => {
-      writeEvent('task', task);
-    });
+    const unsubscribe = services.scheduler.subscribe(
+      (task) => {
+        writeEvent('task', task);
+      },
+      (taskId) => {
+        writeEvent('removed', { id: taskId });
+      },
+    );
     const heartbeat = setInterval(() => {
       if (!reply.raw.writableEnded) {
         reply.raw.write(': heartbeat\n\n');

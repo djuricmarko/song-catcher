@@ -87,6 +87,27 @@ describe('Scheduler', () => {
     await scheduler.stop();
   });
 
+  it('notifies subscribers when finished tasks are trimmed from history', async () => {
+    const scheduler = new Scheduler(1, 10, logger);
+    scheduler.register('noop', async () => []);
+    const removed: number[] = [];
+    scheduler.subscribe(
+      () => undefined,
+      (taskId) => {
+        removed.push(taskId);
+      },
+    );
+    scheduler.start();
+
+    const tasks = Array.from({ length: 12 }, () => scheduler.enqueue('noop', 'noop', {}));
+    await waitForTask(scheduler, tasks.at(-1)!.id);
+
+    expect(removed).toEqual([1, 2]);
+    expect(scheduler.getTasks().map((task) => task.id)).toEqual(tasks.slice(2).map((t) => t.id));
+
+    await scheduler.stop();
+  });
+
   it('reports progress', async () => {
     const scheduler = new Scheduler(1, 10, logger);
     const progressEvents: Array<[number, number]> = [];

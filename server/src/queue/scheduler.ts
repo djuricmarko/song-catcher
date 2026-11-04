@@ -13,6 +13,7 @@ export type TaskHandler = (
 ) => Promise<string[]>;
 
 export type TaskListener = (task: QueueTask) => void;
+export type TaskRemovedListener = (taskId: number) => void;
 
 interface InternalTask {
   id: number;
@@ -38,6 +39,7 @@ export class Scheduler {
   private readonly tasks: InternalTask[] = [];
   private readonly handlers = new Map<string, TaskHandler>();
   private readonly listeners = new Set<TaskListener>();
+  private readonly removedListeners = new Set<TaskRemovedListener>();
   private readonly waiters: Array<() => void> = [];
   private workers: Array<Promise<void>> = [];
   private nextTaskId = 1;
@@ -141,10 +143,20 @@ export class Scheduler {
     return this.tasks.map((task) => this.snapshot(task));
   }
 
-  public subscribe(listener: TaskListener): () => void {
+  /**
+   * Subscribes to task updates and, optionally, to tasks being dropped from
+   * the bounded history so clients can prune their copy.
+   */
+  public subscribe(listener: TaskListener, onRemoved?: TaskRemovedListener): () => void {
     this.listeners.add(listener);
+    if (onRemoved) {
+      this.removedListeners.add(onRemoved);
+    }
     return () => {
       this.listeners.delete(listener);
+      if (onRemoved) {
+        this.removedListeners.delete(onRemoved);
+      }
     };
   }
 
@@ -222,7 +234,16 @@ export class Scheduler {
       if (index === -1) {
         return;
       }
-      this.tasks.splice(index, 1);
+      const [removed] = this.tasks.splice(index, 1);
+      if (removed) {
+        for (const listener of this.removedListeners) {
+          try {
+            listener(removed.id);
+          } catch (error) {
+            this.logger.warn({ err: error }, 'queue listener failed');
+          }
+        }
+      }
     }
   }
 

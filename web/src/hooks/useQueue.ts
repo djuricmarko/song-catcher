@@ -11,10 +11,13 @@ export function useQueue() {
 
   useEffect(() => {
     let active = true;
+    // The SSE snapshot is authoritative; the initial fetch is only a fallback
+    // for when the stream is slow to connect and must not overwrite newer data.
+    let streamed = false;
 
     void getQueue()
       .then((initial) => {
-        if (active) {
+        if (active && !streamed) {
           setTasks(initial);
           setError(null);
         }
@@ -29,6 +32,7 @@ export function useQueue() {
 
     const onSnapshot = (event: MessageEvent<string>) => {
       try {
+        streamed = true;
         setTasks(JSON.parse(event.data) as QueueTask[]);
         setError(null);
       } catch {
@@ -38,6 +42,7 @@ export function useQueue() {
 
     const onTask = (event: MessageEvent<string>) => {
       try {
+        streamed = true;
         const task = JSON.parse(event.data) as QueueTask;
         setTasks((previous) => {
           const index = previous.findIndex((candidate) => candidate.id === task.id);
@@ -53,8 +58,18 @@ export function useQueue() {
       }
     };
 
+    const onRemoved = (event: MessageEvent<string>) => {
+      try {
+        const { id } = JSON.parse(event.data) as { id: number };
+        setTasks((previous) => previous.filter((task) => task.id !== id));
+      } catch {
+        // Ignore malformed events and wait for the next one.
+      }
+    };
+
     source.addEventListener('snapshot', onSnapshot as EventListener);
     source.addEventListener('task', onTask as EventListener);
+    source.addEventListener('removed', onRemoved as EventListener);
     source.onopen = () => {
       setConnected(true);
     };
@@ -66,6 +81,7 @@ export function useQueue() {
       active = false;
       source.removeEventListener('snapshot', onSnapshot as EventListener);
       source.removeEventListener('task', onTask as EventListener);
+      source.removeEventListener('removed', onRemoved as EventListener);
       source.close();
     };
   }, []);
