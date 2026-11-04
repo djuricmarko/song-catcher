@@ -255,4 +255,45 @@ printf '%s\\n' "$out"
     expect(filename).toBe(path.join(directory, 'video.mp3'));
     expect(await readFile(filename, 'utf8')).toBe('audio');
   });
+
+  it('passes the URL after -- and disables playlists', async () => {
+    const scriptPath = path.join(baseDirectory, 'args-ytdlp.sh');
+    const argsFile = path.join(baseDirectory, 'args.txt');
+    await writeFile(
+      scriptPath,
+      `#!/bin/sh
+for arg in "$@"; do printf '%s\\n' "$arg" >> "${argsFile}"; done
+printf 'audio' > "${baseDirectory}/v.mp3"
+printf '%s\\n' "${baseDirectory}/v.mp3"
+`,
+    );
+    await chmod(scriptPath, 0o755);
+
+    await downloadWithYtDlp({
+      url: 'https://example.com/watch?v=1&list=2',
+      destinationDirectory: baseDirectory,
+      executable: scriptPath,
+    });
+
+    const args = (await readFile(argsFile, 'utf8')).trim().split('\n');
+    expect(args).toContain('--no-playlist');
+    expect(args.slice(-2)).toEqual(['--', 'https://example.com/watch?v=1&list=2']);
+  });
+
+  it('kills yt-dlp after the timeout', async () => {
+    const scriptPath = path.join(baseDirectory, 'slow-ytdlp.sh');
+    await writeFile(scriptPath, '#!/bin/sh\nsleep 10\n');
+    await chmod(scriptPath, 0o755);
+
+    const started = Date.now();
+    await expect(
+      downloadWithYtDlp({
+        url: 'https://example.com/video',
+        destinationDirectory: baseDirectory,
+        executable: scriptPath,
+        timeoutMs: 100,
+      }),
+    ).rejects.toThrowError(/did not finish within/);
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
 });

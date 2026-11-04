@@ -5,6 +5,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+/** A stuck yt-dlp must not occupy a download worker forever. */
+export const DEFAULT_YTDLP_TIMEOUT_MS = 30 * 60_000;
+
 function childEnvironment(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.DEEZER_COOKIE_ARL;
@@ -24,6 +27,7 @@ export interface YoutubeDlOptions {
   executable: string;
   ffmpegPath?: string;
   proxyUrl?: string;
+  timeoutMs?: number;
 }
 
 export function parseYtDlpOutput(stdout: string): string | undefined {
@@ -58,6 +62,9 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     '--print',
     'after_move:filepath',
     '--no-simulate',
+    // A watch URL with &list=... would otherwise download the whole playlist,
+    // but only the last file is reported back.
+    '--no-playlist',
   ];
 
   const ffmpegPath = options.ffmpegPath?.trim();
@@ -69,7 +76,10 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
   if (proxyUrl) {
     args.push('--proxy', proxyUrl);
   }
-  args.push(options.url);
+  // `--` ensures the URL can never be parsed as an option.
+  args.push('--', options.url);
+
+  const timeoutMs = options.timeoutMs ?? DEFAULT_YTDLP_TIMEOUT_MS;
 
   let stdout: string;
   let stderr: string;
@@ -77,10 +87,17 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     const result = await execFileAsync(options.executable, args, {
       maxBuffer: 16 * 1024 * 1024,
       env: childEnvironment(),
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL',
     });
     stdout = result.stdout;
     stderr = result.stderr;
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'killed' in error && error.killed) {
+      throw new YoutubeDlError(`yt-dlp did not finish within ${Math.round(timeoutMs / 1000)} s`, {
+        cause: error,
+      });
+    }
     const details =
       typeof error === 'object' && error !== null && 'stderr' in error
         ? String(error.stderr)
