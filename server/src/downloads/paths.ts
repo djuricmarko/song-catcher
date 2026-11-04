@@ -7,6 +7,13 @@ export type SongPathType = typeof TYPE_TRACK | typeof TYPE_ALBUM | 'playlist';
 
 const UNSAFE_FILENAME_CHARACTERS = /[/\\:*?"<>|]/g;
 const MAX_FILENAME_LENGTH = 180;
+/**
+ * Most filesystems cap a name at 255 bytes. Downloads are first written to
+ * `<name>.<uuid>.part` (42 extra bytes), so keep the final name well below.
+ */
+export const MAX_FILENAME_BYTES = 200;
+
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function stripControlCharacters(value: string): string {
   return Array.from(value, (character) => {
@@ -15,17 +22,39 @@ function stripControlCharacters(value: string): string {
   }).join('');
 }
 
-export function cleanFilename(value: string): string {
-  const cleaned = stripControlCharacters(value)
-    .replace(UNSAFE_FILENAME_CHARACTERS, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_FILENAME_LENGTH)
-    .trim();
-  if (cleaned.length === 0 || cleaned === '.' || cleaned === '..') {
-    return 'unknown';
+/** Truncates without splitting a character or grapheme cluster. */
+function truncate(value: string, maxLength: number, maxBytes: number): string {
+  let result = '';
+  let bytes = 0;
+  for (const { segment } of graphemeSegmenter.segment(value)) {
+    const segmentBytes = Buffer.byteLength(segment, 'utf8');
+    if (result.length + segment.length > maxLength || bytes + segmentBytes > maxBytes) {
+      break;
+    }
+    result += segment;
+    bytes += segmentBytes;
   }
-  return cleaned;
+  return result;
+}
+
+/**
+ * Makes `value` safe to use as a single path component. When `extension` is
+ * given it is appended after truncation, so long names keep their extension.
+ */
+export function cleanFilename(value: string, extension?: string): string {
+  const suffix = extension ? `.${extension}` : '';
+  const cleaned = truncate(
+    stripControlCharacters(value)
+      .replace(UNSAFE_FILENAME_CHARACTERS, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    MAX_FILENAME_LENGTH - suffix.length,
+    MAX_FILENAME_BYTES - Buffer.byteLength(suffix, 'utf8'),
+  ).trim();
+  if (cleaned.length === 0 || cleaned === '.' || cleaned === '..') {
+    return `unknown${suffix}`;
+  }
+  return `${cleaned}${suffix}`;
 }
 
 export function buildSongFilename(
@@ -39,10 +68,10 @@ export function buildSongFilename(
   if (searchType === TYPE_ALBUM) {
     const trackNumber = Number.parseInt(song.TRACK_NUMBER ?? '', 10);
     const prefix = Number.isFinite(trackNumber) ? `${String(trackNumber).padStart(2, '0')} - ` : '';
-    return cleanFilename(`${prefix}${artist} ${title}.${extension}`);
+    return cleanFilename(`${prefix}${artist} ${title}`, extension);
   }
 
-  return cleanFilename(`${artist} - ${title}.${extension}`);
+  return cleanFilename(`${artist} - ${title}`, extension);
 }
 
 export function buildAlbumDirectory(song: DeezerSong): string {

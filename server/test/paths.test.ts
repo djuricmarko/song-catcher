@@ -8,6 +8,7 @@ import {
   buildPlaylistDirectory,
   buildSongFilename,
   cleanFilename,
+  MAX_FILENAME_BYTES,
   mpdRelativePath,
   songDirectory,
 } from '../src/downloads/paths.js';
@@ -36,6 +37,24 @@ describe('cleanFilename', () => {
 
   it('caps very long names', () => {
     expect(cleanFilename('a'.repeat(500))).toHaveLength(180);
+  });
+
+  it('keeps the extension when truncating', () => {
+    const name = cleanFilename('a'.repeat(500), 'flac');
+    expect(name).toHaveLength(180);
+    expect(name.endsWith('a.flac')).toBe(true);
+  });
+
+  it('caps multi-byte names by bytes, not characters', () => {
+    const name = cleanFilename('大'.repeat(150), 'mp3');
+    expect(Buffer.byteLength(name, 'utf8')).toBeLessThanOrEqual(MAX_FILENAME_BYTES);
+    expect(name).toBe(`${'大'.repeat(65)}.mp3`);
+  });
+
+  it('never splits surrogate pairs or grapheme clusters', () => {
+    // The emoji is two UTF-16 units and would straddle the 180 limit.
+    expect(cleanFilename(`${'a'.repeat(179)}🎵`)).toBe('a'.repeat(179));
+    expect(cleanFilename(`${'a'.repeat(179)}éx`)).toBe('a'.repeat(179));
   });
 
   it('falls back when everything was removed', () => {
