@@ -318,6 +318,36 @@ describe('queue and files', () => {
   });
 });
 
+describe('queue event stream', () => {
+  it('streams task updates and does not block server shutdown', async () => {
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const controller = new AbortController();
+    const response = await fetch(`${address}/api/queue/events`, { signal: controller.signal });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let received = '';
+    const readUntil = async (marker: string) => {
+      while (!received.includes(marker)) {
+        const { value, done } = await reader.read();
+        if (done) {
+          return;
+        }
+        received += decoder.decode(value);
+      }
+    };
+
+    await readUntil('event: snapshot');
+    scheduler.enqueue('Downloading track', 'download_deezer_song_and_queue', { track_id: '1' });
+    await readUntil('event: task');
+    expect(received).toContain('"description":"Downloading track"');
+
+    const started = Date.now();
+    await app.close();
+    expect(Date.now() - started).toBeLessThan(2_000);
+    controller.abort();
+  });
+});
+
 describe('debug', () => {
   it('explains when no debug source is configured', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/debug' });

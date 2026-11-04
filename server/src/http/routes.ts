@@ -135,6 +135,16 @@ export async function registerApiRoutes(
 ): Promise<void> {
   const api = `${config.http.urlPrefix}/api`;
 
+  // Server-sent event streams never become idle, so Fastify's close() would
+  // wait on them forever. End them explicitly when the server shuts down.
+  const eventStreams = new Set<ServerResponse>();
+  app.addHook('preClose', async () => {
+    for (const stream of eventStreams) {
+      stream.end();
+    }
+    eventStreams.clear();
+  });
+
   app.post(`${api}/search`, async (request, reply) => {
     try {
       const body = parseBody(searchSchema, request.body);
@@ -244,6 +254,7 @@ export async function registerApiRoutes(
       }
     };
 
+    eventStreams.add(reply.raw);
     writeEvent('snapshot', services.scheduler.getTasks());
     const unsubscribe = services.scheduler.subscribe((task) => {
       writeEvent('task', task);
@@ -254,9 +265,10 @@ export async function registerApiRoutes(
       }
     }, 15_000);
 
-    request.raw.on('close', () => {
+    reply.raw.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
+      eventStreams.delete(reply.raw);
     });
   });
 

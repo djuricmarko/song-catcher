@@ -57,6 +57,19 @@ describe('Scheduler', () => {
     await scheduler.stop();
   });
 
+  it('stops within the grace period even if a task never finishes', async () => {
+    const scheduler = new Scheduler(1, 10, logger);
+    scheduler.register('hang', () => new Promise<string[]>(() => undefined));
+    scheduler.start();
+    scheduler.enqueue('hang', 'hang', {});
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const started = Date.now();
+    await scheduler.stop(50);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(() => scheduler.enqueue('hang', 'hang', {})).toThrowError(/stopping/);
+  });
+
   it('reports progress', async () => {
     const scheduler = new Scheduler(1, 10, logger);
     const progressEvents: Array<[number, number]> = [];

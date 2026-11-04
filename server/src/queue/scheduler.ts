@@ -63,16 +63,39 @@ export class Scheduler {
     this.logger.info({ workers: this.workerCount }, 'download workers started');
   }
 
-  public async stop(): Promise<void> {
-    if (this.stopRequested) {
-      await Promise.allSettled(this.workers);
+  /**
+   * Stops accepting work and waits for running tasks. With `graceMs`, gives
+   * up waiting after that long so shutdown cannot hang on a stuck download;
+   * abandoned tasks are logged and simply die with the process.
+   */
+  public async stop(graceMs = Number.POSITIVE_INFINITY): Promise<void> {
+    if (!this.stopRequested) {
+      this.stopRequested = true;
+      for (const wake of this.waiters.splice(0)) {
+        wake();
+      }
+    }
+
+    const workers = Promise.allSettled(this.workers).then(() => true);
+    let timer: NodeJS.Timeout | undefined;
+    const finished = Number.isFinite(graceMs)
+      ? await Promise.race([
+          workers,
+          new Promise<false>((resolve) => {
+            timer = setTimeout(() => resolve(false), graceMs);
+          }),
+        ])
+      : await workers;
+    clearTimeout(timer);
+
+    if (!finished) {
+      const active = this.tasks.filter((task) => task.state === 'active').map((task) => task.id);
+      this.logger.warn(
+        { graceMs, activeTaskIds: active },
+        'download workers did not finish in time; abandoning running tasks',
+      );
       return;
     }
-    this.stopRequested = true;
-    for (const wake of this.waiters.splice(0)) {
-      wake();
-    }
-    await Promise.allSettled(this.workers);
     this.workers = [];
     this.logger.info('download workers stopped');
   }
