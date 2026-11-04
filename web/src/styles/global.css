@@ -1,0 +1,259 @@
+/*
+ * Global design tokens and a minimal reset. Component styles live in
+ * co-located `*.module.css` files and reference these custom properties.
+ *
+ * Direction: "hi-fi deck". Warm paper / smoked-glass surfaces, ink text,
+ * one signal colour (amber-orange, like a recording LED), monospace for
+ * technical labels and a serif for page titles.
+ */
+
+@import '@fontsource-variable/schibsted-grotesk/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #efebe2;
+  --bg-sunken: #e6e1d5;
+  --surface: #f8f6f0;
+  --surface-raised: #fffdf8;
+  --surface-hover: #ece7dc;
+  --line: #d8d1c2;
+  --line-strong: #b9b09d;
+
+  /* Ink */
+  --ink: #1b1914;
+  --ink-soft: #4a463c;
+  --ink-muted: #7a7466;
+  --ink-faint: #a39d8e;
+
+  /* Signal */
+  --signal: #e2531f;
+  --signal-strong: #c2410f;
+  --signal-soft: color-mix(in oklab, var(--signal) 14%, transparent);
+  --on-signal: #fff8f2;
+
+  /* Status */
+  --ok: #3f7a3a;
+  --ok-soft: color-mix(in oklab, var(--ok) 14%, transparent);
+  --warn: #b07a06;
+  --warn-soft: color-mix(in oklab, var(--warn) 16%, transparent);
+  --bad: #b83227;
+  --bad-soft: color-mix(in oklab, var(--bad) 12%, transparent);
+  --idle: #8a8475;
+
+  /* Misc */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--signal);
+  --shadow-popup:
+    0 1px 0 rgb(255 255 255 / 0.6) inset, 0 12px 32px -8px rgb(40 30 10 / 0.25), 0 2px 6px -2px rgb(40 30 10 / 0.15);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 1px 2px rgb(40 30 10 / 0.06);
+  --grain-opacity: 0.035;
+
+  /* Typography */
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+
+  /* Shape */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+
+  /* Layout */
+  --sidebar-width: 15.5rem;
+  --content-max-width: 64rem;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #121110;
+  --bg-sunken: #0c0b0a;
+  --surface: #1a1917;
+  --surface-raised: #222120;
+  --surface-hover: #292826;
+  --line: #2e2c29;
+  --line-strong: #45423d;
+
+  --ink: #ede8de;
+  --ink-soft: #c7c1b4;
+  --ink-muted: #8d877b;
+  --ink-faint: #5f5a52;
+
+  --signal: #ff6b35;
+  --signal-strong: #ff8a5c;
+  --on-signal: #1a0d06;
+
+  --ok: #7cbf6a;
+  --warn: #e0aa3e;
+  --bad: #f06a5a;
+  --idle: #6d685f;
+
+  --shadow-popup: 0 0 0 1px rgb(255 255 255 / 0.04) inset, 0 16px 40px -8px rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset;
+  --grain-opacity: 0.05;
+}
+
+/* Reset */
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+}
+
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+ol,
+ul {
+  list-style: none;
+}
+
+img,
+svg,
+video,
+audio,
+canvas,
+iframe,
+embed,
+object {
+  display: block;
+  vertical-align: middle;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background-color: transparent;
+  border-radius: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 1em;
+}
+
+table {
+  text-indent: 0;
+  border-color: inherit;
+  border-collapse: collapse;
+}
+
+summary {
+  display: list-item;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--on-signal);
+}
+
+/* Base */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  transition:
+    background-color 240ms var(--ease),
+    color 240ms var(--ease);
+}
+
+/* Film grain over the whole app; purely decorative. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
+/* Toasts (sonner) */
+[data-sonner-toaster] {
+  --normal-bg: var(--surface-raised);
+  --normal-border: var(--line);
+  --normal-text: var(--ink);
+  --border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+}

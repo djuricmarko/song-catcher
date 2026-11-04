@@ -1,0 +1,61 @@
+/* The terminal stays dark in both themes; it reads as a physical screen. */
+.terminal {
+  overflow: hidden;
+  border: 1px solid #2a2824;
+  border-radius: var(--radius-md);
+  background-color: #141310;
+  box-shadow: var(--shadow-card);
+}
+
+.terminalBar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1px solid #2a2824;
+  background-color: #1c1b18;
+}
+
+.dots {
+  display: flex;
+  gap: 5px;
+}
+
+.dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-full);
+  background-color: #3a3833;
+}
+
+.dots span:first-child {
+  background-color: var(--signal);
+}
+
+.terminalTitle {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: #8d877b;
+}
+
+.output {
+  max-height: 65vh;
+  overflow: auto;
+  padding: 1rem 1.125rem;
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: #d8d2c4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

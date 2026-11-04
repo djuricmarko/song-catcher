@@ -1,0 +1,159 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-sunken);
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.crumbSeparator {
+  color: var(--ink-faint);
+}
+
+.crumbLink {
+  color: var(--ink-muted);
+  transition: color var(--dur) var(--ease);
+}
+
+.crumbLink:hover {
+  color: var(--signal);
+}
+
+.crumb:last-child .crumbLink {
+  color: var(--ink);
+}
+
+.counts {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.listing {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.6875rem 0.875rem;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--text-sm);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.entry:hover {
+  background-color: var(--surface-hover);
+}
+
+.iconFolder {
+  flex-shrink: 0;
+  color: var(--warn);
+}
+
+.iconArchive {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+
+.iconAudio {
+  flex-shrink: 0;
+  color: var(--signal);
+}
+
+.iconFile {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+}
+
+.directoryName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSize {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.entryTrail {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.entry:hover .entryTrail,
+.entry:focus-visible .entryTrail {
+  opacity: 1;
+  transform: none;
+  color: var(--ink);
+}
+
+.skeleton {
+  height: 2.75rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-sunken), var(--surface-hover), var(--bg-sunken));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

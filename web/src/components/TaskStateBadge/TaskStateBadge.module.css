@@ -1,0 +1,48 @@
+.badge {
+  --tone: var(--idle);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tone);
+  white-space: nowrap;
+}
+
+.led {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: var(--radius-full);
+  background-color: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--tone) 18%, transparent);
+}
+
+.waiting {
+  --tone: var(--idle);
+}
+
+.active {
+  --tone: var(--signal);
+}
+
+.active .led {
+  animation: blink 1.1s steps(2, jump-none) infinite;
+  box-shadow: 0 0 8px var(--tone);
+}
+
+.done {
+  --tone: var(--ok);
+}
+
+.failed {
+  --tone: var(--bad);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}

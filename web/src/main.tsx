@@ -6,7 +6,8 @@ import { Toaster } from 'sonner';
 
 import App from './App';
 import { APP_ROOT } from './api/client';
-import './index.css';
+import { useTheme } from './hooks/useTheme';
+import './styles/global.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,6 +17,11 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function ThemedToaster() {
+  const { preference } = useTheme();
+  return <Toaster position="bottom-right" theme={preference} />;
+}
 
 const root = document.getElementById('root');
 if (!root) {
@@ -27,7 +33,7 @@ createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={APP_ROOT || '/'}>
         <App />
-        <Toaster position="bottom-right" />
+        <ThemedToaster />
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

@@ -2,7 +2,6 @@ import type {
   ApiConfigResponse,
   DebugResponse,
   FilesResponse,
-  HealthResponse,
   QueueTask,
   SearchResultDto,
   TaskAcceptedResponse,
@@ -57,10 +56,6 @@ function post<T>(path: string, body: unknown): Promise<T> {
 
 export function getConfig(): Promise<ApiConfigResponse> {
   return request<ApiConfigResponse>('/config');
-}
-
-export function getHealth(): Promise<HealthResponse> {
-  return request<HealthResponse>('/health');
 }
 
 export function searchMusic(type: string, query: string): Promise<SearchResultDto[]> {

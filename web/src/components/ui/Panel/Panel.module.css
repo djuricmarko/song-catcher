@@ -1,0 +1,6 @@
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-card);
+}

@@ -1,0 +1,1 @@
+export { DeezerPage } from './DeezerPage';
