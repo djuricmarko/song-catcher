@@ -12,6 +12,7 @@ import type { DownloadService } from '../src/downloads/service.js';
 import { loadConfig, type AppConfig } from '../src/config/env.js';
 import { createServer } from '../src/http/server.js';
 import { Scheduler } from '../src/queue/scheduler.js';
+import type { DownloadTasks } from '../src/queue/tasks.js';
 
 const ARL = 'a'.repeat(192);
 const logger = pino({ level: 'silent' });
@@ -30,7 +31,7 @@ const song: DeezerSong = {
 let baseDirectory: string;
 let config: AppConfig;
 let app: Awaited<ReturnType<typeof createServer>>;
-let scheduler: Scheduler;
+let scheduler: Scheduler<DownloadTasks>;
 
 function createFakeDeezer(): DeezerClient {
   return {
@@ -70,7 +71,7 @@ beforeEach(async () => {
     { cwd: baseDirectory },
   );
 
-  scheduler = new Scheduler(1, 10, logger);
+  scheduler = new Scheduler<DownloadTasks>(1, 10, logger);
   scheduler.register('download_deezer_song_and_queue', async () => []);
   scheduler.register('download_deezer_album_and_queue_and_zip', async () => []);
   scheduler.register('download_deezer_playlist_and_queue_and_zip', async () => []);
@@ -337,7 +338,10 @@ describe('queue event stream', () => {
     };
 
     await readUntil('event: snapshot');
-    scheduler.enqueue('Downloading track', 'download_deezer_song_and_queue', { track_id: '1' });
+    scheduler.enqueue('Downloading track', 'download_deezer_song_and_queue', {
+      track_id: '1',
+      add_to_playlist: false,
+    });
     await readUntil('event: task');
     expect(received).toContain('"description":"Downloading track"');
 
@@ -366,7 +370,7 @@ describe('URL prefix', () => {
       },
       { cwd: baseDirectory },
     );
-    const prefixedScheduler = new Scheduler(1, 10, logger);
+    const prefixedScheduler = new Scheduler<DownloadTasks>(1, 10, logger);
     prefixedScheduler.register('download_deezer_song_and_queue', async () => []);
     prefixedScheduler.start();
 

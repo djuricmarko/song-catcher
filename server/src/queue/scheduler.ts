@@ -7,8 +7,13 @@ export interface TaskContext {
   reportWarning(message: string): void;
 }
 
-export type TaskHandler = (
-  args: Record<string, unknown>,
+export type TaskArgs = Record<string, unknown>;
+
+/** Maps handler names to the argument shape each handler receives. */
+export type TaskArgsMap = Record<string, TaskArgs>;
+
+export type TaskHandler<Args extends TaskArgs = TaskArgs> = (
+  args: Args,
   context: TaskContext,
 ) => Promise<string[]>;
 
@@ -35,7 +40,11 @@ interface InternalTask {
  * In-memory worker pool with a bounded history of processed tasks. It mirrors
  * the semantics of the old Python ThreadpoolScheduler while using async tasks.
  */
-export class Scheduler {
+/**
+ * `Tasks` ties each handler name to its argument type, so `register` and
+ * `enqueue` are checked against each other at compile time.
+ */
+export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
   private readonly tasks: InternalTask[] = [];
   private readonly handlers = new Map<string, TaskHandler>();
   private readonly listeners = new Set<TaskListener>();
@@ -51,11 +60,15 @@ export class Scheduler {
     private readonly logger: Logger,
   ) {}
 
-  public register(handlerName: string, handler: TaskHandler): void {
+  public register<Name extends keyof Tasks & string>(
+    handlerName: Name,
+    handler: TaskHandler<Tasks[Name]>,
+  ): void {
     if (this.handlers.has(handlerName)) {
       throw new Error(`Task handler already registered: ${handlerName}`);
     }
-    this.handlers.set(handlerName, handler);
+    // Safe: enqueue() only accepts Tasks[Name] for this name.
+    this.handlers.set(handlerName, handler as TaskHandler);
   }
 
   public start(): void {
@@ -105,10 +118,10 @@ export class Scheduler {
     this.logger.info('download workers stopped');
   }
 
-  public enqueue(
+  public enqueue<Name extends keyof Tasks & string>(
     description: string,
-    handlerName: string,
-    args: Record<string, unknown>,
+    handlerName: Name,
+    args: Tasks[Name],
   ): QueueTask {
     if (this.stopRequested) {
       throw new Error('The scheduler is stopping; cannot enqueue new tasks');

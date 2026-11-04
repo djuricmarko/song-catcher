@@ -18,13 +18,13 @@ import {
   type DeezerClient,
 } from '../deezer/client.js';
 import type { DownloadService } from '../downloads/service.js';
-import type { Scheduler } from '../queue/scheduler.js';
+import type { DownloadScheduler } from '../queue/tasks.js';
 import { getDebugOutput } from './debug.js';
 import { FileAccessError, listFiles } from './files.js';
 
 export interface ApiServices {
   deezer: DeezerClient;
-  scheduler: Scheduler;
+  scheduler: DownloadScheduler;
   downloads: DownloadService;
 }
 

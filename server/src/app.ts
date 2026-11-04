@@ -5,6 +5,7 @@ import { DeezerClient } from './deezer/client.js';
 import { DownloadService } from './downloads/service.js';
 import { createServer } from './http/server.js';
 import { Scheduler } from './queue/scheduler.js';
+import type { DownloadScheduler, DownloadTasks } from './queue/tasks.js';
 
 /**
  * How long shutdown waits for running downloads. Kept below Docker's default
@@ -15,7 +16,7 @@ const SHUTDOWN_GRACE_MS = 8_000;
 export interface BuiltApp {
   app: Awaited<ReturnType<typeof createServer>>;
   deezer: DeezerClient;
-  scheduler: Scheduler;
+  scheduler: DownloadScheduler;
   downloads: DownloadService;
 }
 
@@ -23,22 +24,22 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
   const deezer = new DeezerClient(config, logger);
   await deezer.init();
 
-  const scheduler = new Scheduler(config.queue.workers, config.queue.historyLimit, logger);
+  const scheduler: DownloadScheduler = new Scheduler<DownloadTasks>(
+    config.queue.workers,
+    config.queue.historyLimit,
+    logger,
+  );
   const downloads = new DownloadService(config, deezer, logger);
 
   scheduler.register('download_deezer_song_and_queue', async (args, context) => {
-    return downloads.downloadTrack(
-      String(args.track_id),
-      Boolean(args.add_to_playlist),
-      context.reportProgress,
-    );
+    return downloads.downloadTrack(args.track_id, args.add_to_playlist, context.reportProgress);
   });
 
   scheduler.register('download_deezer_album_and_queue_and_zip', async (args, context) => {
     return downloads.downloadAlbum(
-      String(args.album_id),
-      Boolean(args.add_to_playlist),
-      Boolean(args.create_zip),
+      args.album_id,
+      args.add_to_playlist,
+      args.create_zip,
       context.reportProgress,
       context.reportWarning,
     );
@@ -46,9 +47,9 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
 
   scheduler.register('download_deezer_playlist_and_queue_and_zip', async (args, context) => {
     return downloads.downloadPlaylist(
-      String(args.playlist_id),
-      Boolean(args.add_to_playlist),
-      Boolean(args.create_zip),
+      args.playlist_id,
+      args.add_to_playlist,
+      args.create_zip,
       context.reportProgress,
       context.reportWarning,
     );
@@ -56,16 +57,16 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
 
   scheduler.register('download_deezer_favorites', async (args, context) => {
     return downloads.downloadFavorites(
-      String(args.user_id),
-      Boolean(args.add_to_playlist),
-      Boolean(args.create_zip),
+      args.user_id,
+      args.add_to_playlist,
+      args.create_zip,
       context.reportProgress,
       context.reportWarning,
     );
   });
 
   scheduler.register('download_youtubedl_and_queue', async (args) => {
-    return downloads.downloadYoutube(String(args.video_url), Boolean(args.add_to_playlist));
+    return downloads.downloadYoutube(args.video_url, args.add_to_playlist);
   });
 
   scheduler.start();

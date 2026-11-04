@@ -191,3 +191,20 @@ describe('Scheduler', () => {
     await scheduler.stop();
   });
 });
+
+describe('Scheduler typing', () => {
+  it('ties enqueue arguments to the registered handler at compile time', () => {
+    type Tasks = { greet: { name: string } };
+    const scheduler = new Scheduler<Tasks>(1, 10, logger);
+    scheduler.register('greet', async (args) => [args.name.toUpperCase()]);
+
+    // These lines only need to fail type-checking (`npm run typecheck`).
+    const typeChecks = () => {
+      // @ts-expect-error unknown handler name
+      scheduler.enqueue('x', 'gret', { name: 'a' });
+      // @ts-expect-error wrong argument type
+      scheduler.enqueue('x', 'greet', { name: 1 });
+    };
+    expect(typeChecks).toBeTypeOf('function');
+  });
+});
