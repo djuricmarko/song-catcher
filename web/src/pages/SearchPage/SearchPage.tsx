@@ -14,6 +14,7 @@ import { Input } from '../../components/ui/Input';
 import { Panel } from '../../components/ui/Panel';
 import { Segmented } from '../../components/ui/Segmented';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { dismissKeyboard } from '../../lib/dismissKeyboard';
 
 import styles from './SearchPage.module.css';
 
@@ -116,6 +117,7 @@ export function SearchPage() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAlbumTracks(null);
+    dismissKeyboard();
     void runSearch(mode, query);
   }
 
@@ -209,6 +211,12 @@ export function SearchPage() {
                   : 'Search for a track…'
             }
             aria-label="Search query"
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
           />
           <Button type="submit" size="lg" disabled={searching} className={styles.submit}>
             {searching ? 'Searching…' : 'Search'}

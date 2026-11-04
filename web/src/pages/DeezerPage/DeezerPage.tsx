@@ -8,8 +8,10 @@ import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
+import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { dismissKeyboard } from '../../lib/dismissKeyboard';
 
 import styles from './DeezerPage.module.css';
 
@@ -33,6 +35,7 @@ export function DeezerPage() {
       return;
     }
 
+    dismissKeyboard();
     setBusy(true);
     try {
       const task = await startPlaylistDownload(value, addToPlaylist, createZip);
@@ -53,6 +56,7 @@ export function DeezerPage() {
       return;
     }
 
+    dismissKeyboard();
     setBusy(true);
     try {
       const task = await startFavoritesDownload(value, addToPlaylist, createZip);
@@ -126,6 +130,15 @@ export function DeezerPage() {
                   }}
                   placeholder="https://www.deezer.com/playlist/…"
                   aria-label="Deezer playlist URL"
+                  inputMode="url"
+                  enterKeyHint="go"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  trailing={
+                    playlistUrl ? undefined : <PasteButton onPaste={setPlaylistUrl} label="Paste playlist link" />
+                  }
                 />
                 <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
                   {busy ? 'Queueing…' : 'Download'}
@@ -151,6 +164,8 @@ export function DeezerPage() {
                   }}
                   placeholder="e.g. 123456789"
                   inputMode="numeric"
+                  enterKeyHint="go"
+                  autoComplete="off"
                   aria-label="Deezer user id"
                 />
                 <Button type="submit" size="lg" disabled={busy} className={styles.submit}>

@@ -13,8 +13,10 @@
     box-shadow var(--dur) var(--ease);
 }
 
-.field:hover {
-  border-color: var(--ink-muted);
+@media (hover: hover) {
+  .field:hover {
+    border-color: var(--ink-muted);
+  }
 }
 
 .field:focus-within {
@@ -53,4 +55,20 @@
   flex-shrink: 0;
   align-items: center;
   color: var(--ink-muted);
+}
+
+@media (pointer: coarse) {
+  .md {
+    height: 2.75rem;
+  }
+
+  .lg {
+    height: 3rem;
+  }
+
+  /* Below 16px iOS Safari zooms the page when the field gets focus. */
+  .md,
+  .lg {
+    font-size: max(1rem, 16px);
+  }
 }

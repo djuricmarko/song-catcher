@@ -1,0 +1,32 @@
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-right: -0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.button:active {
+  background-color: var(--surface-hover);
+  color: var(--signal);
+}
+
+@media (hover: hover) {
+  .button:hover {
+    color: var(--ink);
+  }
+}
+
+@media (pointer: coarse) {
+  .button {
+    width: 2.75rem;
+    height: 2.75rem;
+    margin-right: -0.75rem;
+  }
+}

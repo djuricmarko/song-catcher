@@ -49,28 +49,14 @@
   color: var(--bg);
 }
 
-.primary:hover:not([data-disabled]) {
-  background-color: var(--signal);
-  color: var(--on-signal);
-}
-
 .outline {
   border-color: var(--line-strong);
   background-color: var(--surface-raised);
   color: var(--ink);
 }
 
-.outline:hover:not([data-disabled]) {
-  border-color: var(--ink);
-}
-
 .ghost {
   color: var(--ink-soft);
-}
-
-.ghost:hover:not([data-disabled]) {
-  background-color: var(--surface-hover);
-  color: var(--ink);
 }
 
 .quiet {
@@ -85,6 +71,54 @@
   text-transform: uppercase;
 }
 
-.quiet:hover:not([data-disabled]) {
-  color: var(--signal);
+@media (hover: hover) {
+  .primary:hover:not([data-disabled]) {
+    background-color: var(--signal);
+    color: var(--on-signal);
+  }
+
+  .outline:hover:not([data-disabled]) {
+    border-color: var(--ink);
+  }
+
+  .ghost:hover:not([data-disabled]) {
+    background-color: var(--surface-hover);
+    color: var(--ink);
+  }
+
+  .quiet:hover:not([data-disabled]) {
+    color: var(--signal);
+  }
+}
+
+/* Finger-sized targets on touch screens. */
+@media (pointer: coarse) {
+  .sm {
+    height: 2.5rem;
+    padding: 0 0.875rem;
+  }
+
+  .md {
+    height: 2.75rem;
+  }
+
+  .lg {
+    height: 3rem;
+  }
+
+  .quiet {
+    min-height: 2.5rem;
+    height: auto;
+    padding: 0;
+  }
+
+  .primary:active:not([data-disabled]) {
+    background-color: var(--signal);
+    color: var(--on-signal);
+  }
+
+  .outline:active:not([data-disabled]),
+  .ghost:active:not([data-disabled]) {
+    background-color: var(--surface-hover);
+  }
 }

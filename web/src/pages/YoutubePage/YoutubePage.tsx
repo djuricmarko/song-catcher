@@ -7,8 +7,10 @@ import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
+import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { dismissKeyboard } from '../../lib/dismissKeyboard';
 
 import styles from './YoutubePage.module.css';
 
@@ -29,6 +31,7 @@ export function YoutubePage() {
       return;
     }
 
+    dismissKeyboard();
     setBusy(true);
     try {
       const task = await startYoutubeDownload(trimmed, addToPlaylist);
@@ -63,9 +66,15 @@ export function YoutubePage() {
               setUrl(event.target.value);
             }}
             leading={<Link2 size={18} aria-hidden />}
+            trailing={url ? undefined : <PasteButton onPaste={setUrl} label="Paste link" />}
             placeholder="https://www.youtube.com/watch?v=…"
             aria-label="Video URL"
             inputMode="url"
+            enterKeyHint="go"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
           />
           <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
             {busy ? 'Queueing…' : 'Extract'}

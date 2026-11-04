@@ -3,6 +3,8 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 const STORAGE_KEY = 'dd-theme';
+// Mirrors --bg-sunken, the colour of the app bar, in each theme.
+const THEME_COLORS = { light: '#e6e1d5', dark: '#0c0b0a' } as const;
 const listeners = new Set<() => void>();
 
 function readPreference(): ThemePreference {
@@ -24,6 +26,11 @@ function systemPrefersDark(): boolean {
 export function applyTheme(preference: ThemePreference = readPreference()): void {
   const resolved = preference === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : preference;
   document.documentElement.dataset.theme = resolved;
+  // Keep the mobile browser chrome / status bar in step with the app bar.
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (meta) {
+    meta.content = THEME_COLORS[resolved];
+  }
 }
 
 function subscribe(listener: () => void) {

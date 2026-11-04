@@ -1,10 +1,18 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import type { QueueTask } from '@deezer-downloader/shared';
 
 import { API_ROOT, getQueue } from '../api/client';
 
-export function useQueue() {
+interface QueueState {
+  tasks: QueueTask[];
+  connected: boolean;
+  error: string | null;
+}
+
+const QueueContext = createContext<QueueState | null>(null);
+
+function useQueueStream(): QueueState {
   const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,4 +95,21 @@ export function useQueue() {
   }, []);
 
   return { tasks, connected, error };
+}
+
+/**
+ * Holds one queue event stream for the whole app, so the navigation badge
+ * and the queue page share it and switching pages never reconnects.
+ */
+export function QueueProvider({ children }: { children: ReactNode }) {
+  const state = useQueueStream();
+  return <QueueContext.Provider value={state}>{children}</QueueContext.Provider>;
+}
+
+export function useQueue(): QueueState {
+  const state = useContext(QueueContext);
+  if (!state) {
+    throw new Error('useQueue must be used inside <QueueProvider>');
+  }
+  return state;
 }

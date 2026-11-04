@@ -31,8 +31,10 @@
   transition: transform 220ms var(--ease);
 }
 
-.item:hover {
-  color: var(--ink);
+@media (hover: hover) {
+  .item:hover {
+    color: var(--ink);
+  }
 }
 
 .item[data-pressed] {
@@ -41,4 +43,15 @@
 
 .item[data-pressed]::after {
   transform: scaleX(1);
+}
+
+@media (pointer: coarse) {
+  .item {
+    min-height: 2.75rem;
+    padding: 0;
+  }
+
+  .item::after {
+    bottom: 0.375rem;
+  }
 }

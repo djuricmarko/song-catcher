@@ -36,8 +36,10 @@
   transition: color var(--dur) var(--ease);
 }
 
-.crumbLink:hover {
-  color: var(--signal);
+@media (hover: hover) {
+  .crumbLink:hover {
+    color: var(--signal);
+  }
 }
 
 .crumb:last-child .crumbLink {
@@ -69,8 +71,14 @@
   transition: background-color var(--dur) var(--ease);
 }
 
-.entry:hover {
+.entry:active {
   background-color: var(--surface-hover);
+}
+
+@media (hover: hover) {
+  .entry:hover {
+    background-color: var(--surface-hover);
+  }
 }
 
 .iconFolder {
@@ -127,11 +135,26 @@
     transform var(--dur) var(--ease);
 }
 
-.entry:hover .entryTrail,
+@media (hover: hover) {
+  .entry:hover .entryTrail {
+    opacity: 1;
+    transform: none;
+    color: var(--ink);
+  }
+}
+
 .entry:focus-visible .entryTrail {
   opacity: 1;
   transform: none;
   color: var(--ink);
+}
+
+/* Touch: show the trailing chevron / download glyph so rows read as tappable. */
+@media (hover: none) {
+  .entryTrail {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .skeleton {
@@ -155,5 +178,50 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (pointer: coarse) {
+  .entry {
+    min-height: 3.25rem;
+    padding: 0.75rem;
+  }
+
+  .crumbLink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+  }
+
+  .skeleton {
+    height: 3.25rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .toolbar {
+    padding: 0.375rem 0.75rem;
+  }
+
+  /* Deep paths scroll sideways instead of stacking into many lines. */
+  .breadcrumbs {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .breadcrumbs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .crumb {
+    flex-shrink: 0;
+  }
+
+  .entry {
+    gap: 0.75rem;
+    padding-inline: 0.5rem;
   }
 }

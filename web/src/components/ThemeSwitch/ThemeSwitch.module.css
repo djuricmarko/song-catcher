@@ -19,12 +19,21 @@
     color var(--dur) var(--ease);
 }
 
-.item:hover {
-  color: var(--ink);
+@media (hover: hover) {
+  .item:hover {
+    color: var(--ink);
+  }
 }
 
 .item[data-pressed] {
   background-color: var(--surface-raised);
   color: var(--signal);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+@media (pointer: coarse) {
+  .item {
+    width: 2.375rem;
+    height: 2.125rem;
+  }
 }

@@ -41,6 +41,9 @@
 
 .output {
   max-height: 65vh;
+  max-height: 65dvh;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   overflow: auto;
   padding: 1rem 1.125rem;
   font-size: var(--text-xs);
@@ -57,5 +60,13 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 560px) {
+  .output {
+    padding: 0.75rem;
+    font-size: 0.6875rem;
+    line-height: 1.6;
   }
 }

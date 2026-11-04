@@ -34,3 +34,18 @@
   text-decoration-color: var(--signal);
   text-underline-offset: 3px;
 }
+
+@media (max-width: 560px) {
+  .empty {
+    padding: 2.25rem 1.25rem;
+  }
+
+  .art {
+    width: 5rem;
+    margin-bottom: 1rem;
+  }
+
+  .title {
+    font-size: 1.375rem;
+  }
+}
