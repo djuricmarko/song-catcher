@@ -76,11 +76,25 @@ export class Deezer403Exception extends Error {
 }
 
 export class DeezerApiException extends Error {
-  public constructor(message: string, options?: ErrorOptions) {
+  /** True when the failure looks like an expired session or license token. */
+  public readonly sessionRelated: boolean;
+
+  public constructor(message: string, options?: ErrorOptions & { sessionRelated?: boolean }) {
     super(message, options);
     this.name = 'DeezerApiException';
+    this.sessionRelated = options?.sessionRelated ?? false;
   }
 }
+
+function isSessionError(error: unknown): boolean {
+  return (
+    error instanceof Deezer403Exception ||
+    (error instanceof DeezerApiException && error.sessionRelated)
+  );
+}
+
+/** Don't hammer Deezer when many songs fail for a reason a refresh can't fix. */
+const SESSION_REFRESH_INTERVAL_MS = 60_000;
 
 interface WebSoundQuality {
   high?: boolean;
@@ -148,6 +162,8 @@ export class DeezerClient {
   /** Formats to request, best first; Deezer returns the best one available per track. */
   private soundFormats: SoundFormat[] = ['MP3_128'];
   private initialized = false;
+  private lastInitAt = 0;
+  private refreshing: Promise<boolean> | undefined;
   private readonly pictureCache = new Map<string, Promise<Buffer | undefined>>();
 
   public constructor(
@@ -207,6 +223,7 @@ export class DeezerClient {
     this.licenseToken = userData.licenseToken;
     this.setSongQuality(userData.webSoundQuality, userData.webHq);
     this.initialized = true;
+    this.lastInitAt = Date.now();
 
     this.logger.info(
       {
@@ -256,6 +273,46 @@ export class DeezerClient {
     }
 
     return { licenseToken, webSoundQuality, webHq: options.web_hq === true };
+  }
+
+  /**
+   * Re-reads the user data (license token, session cookies). Concurrent
+   * callers share one refresh, and refreshes are rate-limited. Resolves to
+   * true when the session was refreshed and the caller should retry.
+   */
+  private refreshSession(): Promise<boolean> {
+    if (this.refreshing) {
+      return this.refreshing;
+    }
+    if (Date.now() - this.lastInitAt < SESSION_REFRESH_INTERVAL_MS) {
+      return Promise.resolve(false);
+    }
+
+    this.logger.info('Deezer session looks expired; refreshing it');
+    this.refreshing = this.init()
+      .then(() => true)
+      .catch((error: unknown) => {
+        // Still rate-limit: a dead ARL would otherwise be retried per song.
+        this.lastInitAt = Date.now();
+        this.logger.error({ err: error }, 'could not refresh the Deezer session');
+        return false;
+      })
+      .finally(() => {
+        this.refreshing = undefined;
+      });
+    return this.refreshing;
+  }
+
+  /** Runs `operation`, refreshing the session and retrying once on session errors. */
+  private async withSessionRetry<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (isSessionError(error) && (await this.refreshSession())) {
+        return operation();
+      }
+      throw error;
+    }
   }
 
   private setSongQuality(webSoundQuality: WebSoundQuality, webHq: boolean): void {
@@ -330,7 +387,11 @@ export class DeezerClient {
     );
   }
 
-  private async fetchWebsiteState(
+  private fetchWebsiteState(searchType: WebsiteType, id: string | number): Promise<DeezerAppState> {
+    return this.withSessionRetry(() => this.fetchWebsiteStateOnce(searchType, id));
+  }
+
+  private async fetchWebsiteStateOnce(
     searchType: WebsiteType,
     id: string | number,
   ): Promise<DeezerAppState> {
@@ -538,7 +599,11 @@ export class DeezerClient {
     return ids;
   }
 
-  public async getSongUrl(trackToken: string): Promise<SongSource> {
+  public getSongUrl(trackToken: string): Promise<SongSource> {
+    return this.withSessionRetry(() => this.getSongUrlOnce(trackToken));
+  }
+
+  private async getSongUrlOnce(trackToken: string): Promise<SongSource> {
     let response: { statusCode: number; body: unknown };
     try {
       response = await this.http.post(MEDIA_URL, {
@@ -566,6 +631,7 @@ export class DeezerClient {
     if (response.statusCode >= 400) {
       throw new DeezerApiException(
         `Could not retrieve song URL: HTTP ${response.statusCode} ${JSON.stringify(body)}`,
+        { sessionRelated: response.statusCode === 401 || response.statusCode === 403 },
       );
     }
 
@@ -576,9 +642,10 @@ export class DeezerClient {
       );
     }
     if (entry.errors && entry.errors.length > 0) {
-      throw new DeezerApiException(
-        `Could not get download URL from API: ${entry.errors[0]?.message ?? 'unknown error'}`,
-      );
+      const message = entry.errors[0]?.message ?? 'unknown error';
+      throw new DeezerApiException(`Could not get download URL from API: ${message}`, {
+        sessionRelated: /licen[cs]e|expired|session|auth/i.test(message),
+      });
     }
 
     const media = entry.media?.[0];

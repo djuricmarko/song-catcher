@@ -5,7 +5,7 @@ import path from 'node:path';
 import nock from 'nock';
 import NodeID3 from 'node-id3';
 import pino from 'pino';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
 import { Deezer403Exception, Deezer404Exception, DeezerClient } from '../src/deezer/client.js';
@@ -436,5 +436,89 @@ describe('DeezerClient.downloadSong', () => {
     expect(cover.isDone()).toBe(true);
     expect((await NodeID3.Promise.read(first)).image).toBeTruthy();
     expect((await NodeID3.Promise.read(second)).image).toBeTruthy();
+  });
+});
+
+describe('DeezerClient session refresh', () => {
+  function mockUserData(licenseToken: string) {
+    return nock('https://www.deezer.com')
+      .get('/ajax/gw-light.php')
+      .query(userDataUrl)
+      .reply(200, {
+        results: {
+          USER: {
+            OPTIONS: { license_token: licenseToken, web_sound_quality: { lossless: false } },
+          },
+        },
+      });
+  }
+
+  const albumPage = `<html><script>{"DATA":{"__TYPE__":"album","ART_NAME":"Album Artist","MD5_ORIGIN":"origin"},"SONGS":{"data":[]}}</script></html>`;
+
+  it('refreshes the session and retries once when the page says we are logged out', async () => {
+    vi.useFakeTimers({ now: 0, toFake: ['Date'] });
+    try {
+      mockUserData('first');
+      const client = makeClient();
+      await client.init();
+      vi.setSystemTime(10 * 60_000);
+
+      const refresh = mockUserData('second');
+      nock('https://www.deezer.com')
+        .get('/us/album/3')
+        .reply(200, '<html>login</html>')
+        .get('/us/album/3')
+        .reply(200, albumPage);
+
+      await expect(client.getSongInfosFromWebsite('album', '3')).resolves.toEqual([]);
+      expect(refresh.isDone()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries get_url with the new license token after a license error', async () => {
+    vi.useFakeTimers({ now: 0, toFake: ['Date'] });
+    try {
+      mockUserData('expired');
+      const client = makeClient();
+      await client.init();
+      vi.setSystemTime(10 * 60_000);
+
+      mockUserData('fresh');
+      nock('https://media.deezer.com')
+        .post('/v1/get_url', (body) => body.license_token === 'expired')
+        .reply(200, { data: [{ errors: [{ message: 'License token expired' }] }] })
+        .post('/v1/get_url', (body) => body.license_token === 'fresh')
+        .reply(200, {
+          data: [{ media: [{ format: 'MP3_128', sources: [{ url: 'https://cdn/song' }] }] }],
+        });
+
+      await expect(client.getSongUrl('token')).resolves.toEqual({
+        url: 'https://cdn/song',
+        format: 'MP3_128',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not refresh again within the rate-limit window or for unrelated errors', async () => {
+    mockUserData('first');
+    const client = makeClient();
+    await client.init();
+
+    const refresh = mockUserData('second');
+    nock('https://www.deezer.com').get('/us/album/3').reply(200, '<html>login</html>');
+    await expect(client.getSongInfosFromWebsite('album', '3')).rejects.toBeInstanceOf(
+      Deezer403Exception,
+    );
+
+    nock('https://media.deezer.com')
+      .post('/v1/get_url')
+      .reply(200, { data: [{ errors: [{ message: 'Track token has no sufficient rights' }] }] });
+    await expect(client.getSongUrl('token')).rejects.toThrowError(/no sufficient rights/);
+
+    expect(refresh.isDone()).toBe(false);
   });
 });
