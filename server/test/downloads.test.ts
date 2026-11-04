@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -183,6 +183,13 @@ describe('DownloadService', () => {
     expect(files).toHaveLength(1);
     expect(files[0]).toBe(path.join(baseDirectory, 'zips', 'My Playlist.zip'));
     expect((await stat(files[0]!)).size).toBeGreaterThan(0);
+
+    const zip = await readFile(files[0]!);
+    expect(zip.subarray(0, 4)).toEqual(Buffer.from('PK\x03\x04', 'latin1'));
+    // Compression method 0 = stored; audio is not worth deflating.
+    expect(zip.readUInt16LE(8)).toBe(0);
+    // The temporary .part file was renamed, not left behind.
+    expect(await readdir(path.join(baseDirectory, 'zips'))).toEqual(['My Playlist.zip']);
   });
 
   it('downloads favorites into a favorites playlist', async () => {

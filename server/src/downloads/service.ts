@@ -280,8 +280,12 @@ export class DownloadService {
       throw new DownloadError('Cannot create a zip file; none of the songs exist');
     }
 
-    const output = createWriteStream(zipPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    // Write to a temporary file and rename, so a concurrent job or a user
+    // downloading the previous zip never sees a half-written archive.
+    const temporaryZip = `${zipPath}.${randomUUID()}.part`;
+    const output = createWriteStream(temporaryZip);
+    // MP3/FLAC are already compressed; deflating them only burns CPU.
+    const archive = archiver('zip', { store: true });
 
     const completed = new Promise<void>((resolve, reject) => {
       output.on('close', resolve);
@@ -299,8 +303,9 @@ export class DownloadService {
     try {
       await archive.finalize();
       await completed;
+      await rename(temporaryZip, zipPath);
     } catch (error) {
-      await rm(zipPath, { force: true }).catch(() => undefined);
+      await rm(temporaryZip, { force: true }).catch(() => undefined);
       throw new DownloadError(`Could not create zip file ${zipPath}: ${String(error)}`, {
         cause: error,
       });
