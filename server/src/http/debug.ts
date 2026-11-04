@@ -1,10 +1,37 @@
 import { exec } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import type { AppConfig } from '../config/env.js';
 
 const execAsync = promisify(exec);
+
+const TAIL_LINES = 100;
+/** Plenty for 100 log lines; avoids loading a large log file into memory. */
+const TAIL_BYTES = 64 * 1024;
+
+/** Returns the last `lines` lines of a file, reading at most `maxBytes` from its end. */
+export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL_BYTES) {
+  const handle = await open(file, 'r');
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(size, maxBytes);
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, size - length);
+    let text = buffer.toString('utf8');
+    if (length < size) {
+      // Drop the first, probably partial, line.
+      text = text.slice(text.indexOf('\n') + 1);
+    }
+    return text
+      .replace(/\r?\n$/, '')
+      .split(/\r?\n/)
+      .slice(-lines)
+      .join('\n');
+  } finally {
+    await handle.close();
+  }
+}
 
 export async function getDebugOutput(config: AppConfig): Promise<string> {
   if (config.logging.debugCommand) {
@@ -28,8 +55,7 @@ export async function getDebugOutput(config: AppConfig): Promise<string> {
 
   if (config.logging.file) {
     try {
-      const contents = await readFile(config.logging.file, 'utf8');
-      return contents.split(/\r?\n/).slice(-100).join('\n');
+      return await tailFile(config.logging.file);
     } catch (error) {
       return `Could not read ${config.logging.file}: ${
         error instanceof Error ? error.message : String(error)
