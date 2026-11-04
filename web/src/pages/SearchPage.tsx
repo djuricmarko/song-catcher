@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
 import type { SearchResultDto } from '@deezer-downloader/shared';
@@ -38,6 +38,9 @@ export function SearchPage() {
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
   const [searched, setSearched] = useState(false);
+  // Incremented per search; responses from superseded searches are dropped
+  // so a slow earlier request cannot overwrite newer results.
+  const latestSearch = useRef(0);
 
   async function runSearch(
     searchType: SearchMode | 'album_track' | 'artist_top' | 'artist_album',
@@ -49,18 +52,26 @@ export function SearchPage() {
       return;
     }
 
+    const searchId = ++latestSearch.current;
     setSearching(true);
     try {
       const found = await searchMusic(searchType, trimmed);
+      if (searchId !== latestSearch.current) {
+        return;
+      }
       setResults(found);
       setSearched(true);
       if (found.length === 0) {
         toast.info('No results found');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      if (searchId === latestSearch.current) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setSearching(false);
+      if (searchId === latestSearch.current) {
+        setSearching(false);
+      }
     }
   }
 
@@ -100,18 +111,26 @@ export function SearchPage() {
       return;
     }
 
+    const searchId = ++latestSearch.current;
     setSearching(true);
     try {
       const tracks = await searchMusic('album_track', String(albumId));
+      if (searchId !== latestSearch.current) {
+        return;
+      }
       setAlbumTracks({
         albumId,
         title: result.album || result.title || `Album ${albumId}`,
         tracks,
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      if (searchId === latestSearch.current) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setSearching(false);
+      if (searchId === latestSearch.current) {
+        setSearching(false);
+      }
     }
   }
 
