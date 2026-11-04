@@ -100,16 +100,6 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
     };
   });
 
-  app.get(`${prefix}/config.js`, async (_request, reply) => {
-    const runtimeConfig = {
-      apiRoot: `${prefix}/api`,
-      appRoot: prefix,
-    };
-    return reply
-      .type('application/javascript; charset=utf-8')
-      .send(`window.__APP_CONFIG__ = ${JSON.stringify(runtimeConfig)};\n`);
-  });
-
   if (prefix) {
     app.get(prefix, async (_request, reply) => {
       return reply.redirect(`${prefix}/`);
@@ -128,22 +118,15 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
     });
   }
 
-  const renderIndex = (): string | undefined => {
-    if (!indexHtml) {
-      return undefined;
-    }
-    const baseHref = `${prefix}/`;
-    const runtimeConfig = {
-      apiRoot: `${prefix}/api`,
-      appRoot: prefix,
-    };
-    return indexHtml.replace(
-      '<head>',
-      `<head>\n    <base href="${baseHref}" />\n    <script>window.__APP_CONFIG__ = ${JSON.stringify(
-        runtimeConfig,
-      )};</script>`,
-    );
-  };
+  // The runtime config is inlined into index.html; render it once.
+  const runtimeConfig = { apiRoot: `${prefix}/api`, appRoot: prefix };
+  const renderedIndex = indexHtml?.replace(
+    '<head>',
+    `<head>\n    <base href="${prefix}/" />\n    <script>window.__APP_CONFIG__ = ${JSON.stringify(
+      runtimeConfig,
+    )};</script>`,
+  );
+  const renderIndex = (): string | undefined => renderedIndex;
 
   if (indexHtml) {
     app.get(`${prefix}/`, async (_request, reply) => {
