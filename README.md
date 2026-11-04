@@ -50,10 +50,23 @@ Then build and start the app:
 
 ```bash
 npm run build
-node --env-file=.env server/dist/cli.js
+npm start
 ```
 
-Open <http://127.0.0.1:5000>.
+Open <http://127.0.0.1:5000>. The backend serves the built UI itself. `npm start` also runs `vite preview`
+on <http://localhost:4173>, which serves `web/dist` and proxies `/api` and `/downloads` to port 5000. Use
+`npm run start:server` or `npm run start:web` to run only one of them.
+
+On Linux you can install a desktop entry so Song Catcher launches like a normal program:
+
+```bash
+scripts/install-desktop-entry.sh             # adds "Song Catcher" to your application menu
+scripts/install-desktop-entry.sh --uninstall # removes it
+```
+
+Launching it starts the built server in the background (if it isn't already running) and opens the UI in your
+default browser. Right-click the entry and choose **Stop Server** to stop it. Server logs go to
+`~/.local/state/song-catcher/server.log`. You can also run `scripts/song-catcher.sh [start|stop|status]` directly.
 
 For development, run the backend and Vite dev server together:
 
@@ -177,6 +190,7 @@ that path.
 npm install
 npm run dev          # backend + Vite with hot reload (UI at http://localhost:5173)
 npm run build        # shared types, backend and frontend production build
+npm start            # run the built backend (port 5000) and vite preview of web/dist (port 4173)
 npm test             # Vitest suites
 npm run typecheck    # strict TypeScript checks
 npm run lint         # ESLint
