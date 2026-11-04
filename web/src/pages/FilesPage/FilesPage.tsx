@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Download, File, FileArchive, FileAudio, Folder, RefreshCw } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { downloadUrl, getFiles } from '../../api/client';
 import { Alert } from '../../components/Alert';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
+import { saveFile } from '../../lib/saveFile';
 
 import styles from './FilesPage.module.css';
 
@@ -33,6 +36,26 @@ function fileIcon(name: string) {
     return <FileAudio size={18} strokeWidth={1.5} className={styles.iconAudio} aria-hidden />;
   }
   return <File size={18} strokeWidth={1.5} className={styles.iconFile} aria-hidden />;
+}
+
+async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: string, fileName: string) {
+  // Let modified clicks (new tab, etc.) keep their normal link behaviour.
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
+  event.preventDefault();
+
+  const toastId = `save-${filePath}`;
+  try {
+    const result = await saveFile(downloadUrl(filePath), fileName, () => {
+      toast.loading('Saving…', { id: toastId, description: fileName });
+    });
+    if (result === 'saved') {
+      toast.success('Saved', { id: toastId, description: fileName });
+    }
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error), { id: toastId });
+  }
 }
 
 function filesRoute(path: string): string {
@@ -143,7 +166,15 @@ export function FilesPage() {
                   <ChevronRight size={16} className={styles.entryTrail} aria-hidden />
                 </button>
               ) : (
-                <a href={downloadUrl(entry.path)} className={styles.entry}>
+                <a
+                  href={downloadUrl(entry.path)}
+                  download={entry.name}
+                  className={styles.entry}
+                  title={`Download ${entry.name}`}
+                  onClick={(event) => {
+                    void onFileClick(event, entry.path, entry.name);
+                  }}
+                >
                   {fileIcon(entry.name)}
                   <span className={styles.fileName}>{entry.name}</span>
                   <span className={styles.fileSize}>{formatSize(entry.size)}</span>
