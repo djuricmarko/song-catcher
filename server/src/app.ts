@@ -40,6 +40,7 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
       Boolean(args.add_to_playlist),
       Boolean(args.create_zip),
       context.reportProgress,
+      context.reportWarning,
     );
   });
 
@@ -49,6 +50,7 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
       Boolean(args.add_to_playlist),
       Boolean(args.create_zip),
       context.reportProgress,
+      context.reportWarning,
     );
   });
 
@@ -58,6 +60,7 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
       Boolean(args.add_to_playlist),
       Boolean(args.create_zip),
       context.reportProgress,
+      context.reportWarning,
     );
   });
 

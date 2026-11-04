@@ -25,6 +25,8 @@ export interface QueueTask {
   state: TaskState;
   result: string[] | null;
   exception: string | null;
+  /** Non-fatal problems, e.g. songs of an album that could not be downloaded. */
+  warnings: string[];
   progress: [number, number];
   workerIndex: number | null;
   tsQueued: number;

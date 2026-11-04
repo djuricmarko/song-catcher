@@ -114,6 +114,21 @@ export function QueuePage() {
                         </p>
                       </td>
                       <td className="max-w-md px-3 py-3">
+                        {task.warnings.length > 0 ? (
+                          <details className="mb-1 text-xs text-amber-800">
+                            <summary className="cursor-pointer font-medium">
+                              {task.warnings.length} {task.warnings.length === 1 ? 'song' : 'songs'}{' '}
+                              failed
+                            </summary>
+                            <ul className="mt-1 space-y-0.5">
+                              {task.warnings.map((warning, index) => (
+                                <li key={index} className="break-words">
+                                  {warning}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
                         {task.exception ? (
                           <p className="break-words text-xs text-rose-700">{task.exception}</p>
                         ) : task.result && task.result.length > 0 ? (

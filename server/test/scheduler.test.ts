@@ -70,6 +70,23 @@ describe('Scheduler', () => {
     expect(() => scheduler.enqueue('hang', 'hang', {})).toThrowError(/stopping/);
   });
 
+  it('keeps warnings on a successful task', async () => {
+    const scheduler = new Scheduler(1, 10, logger);
+    scheduler.register('partial', async (_args, context) => {
+      context.reportWarning('song 2 failed');
+      return ['song1.mp3'];
+    });
+    scheduler.start();
+
+    const task = scheduler.enqueue('partial', 'partial', {});
+    expect(task.warnings).toEqual([]);
+    const finished = await waitForTask(scheduler, task.id);
+    expect(finished.state).toBe('mission accomplished');
+    expect(finished.warnings).toEqual(['song 2 failed']);
+
+    await scheduler.stop();
+  });
+
   it('reports progress', async () => {
     const scheduler = new Scheduler(1, 10, logger);
     const progressEvents: Array<[number, number]> = [];

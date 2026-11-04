@@ -3,6 +3,8 @@ import type { Logger } from 'pino';
 
 export interface TaskContext {
   reportProgress(current: number, maximum: number): void;
+  /** Records a non-fatal problem; the task can still succeed. */
+  reportWarning(message: string): void;
 }
 
 export type TaskHandler = (
@@ -20,6 +22,7 @@ interface InternalTask {
   state: TaskState;
   result: string[] | null;
   exception: string | null;
+  warnings: string[];
   progress: [number, number];
   workerIndex: number | null;
   tsQueued: number;
@@ -120,6 +123,7 @@ export class Scheduler {
       state: 'waiting',
       result: null,
       exception: null,
+      warnings: [],
       progress: [0, 0],
       workerIndex: null,
       tsQueued: Date.now(),
@@ -189,6 +193,10 @@ export class Scheduler {
             task.progress = [current, maximum];
             this.notify(task);
           },
+          reportWarning: (message) => {
+            task.warnings.push(message);
+            this.notify(task);
+          },
         });
         task.state = 'mission accomplished';
       } catch (error) {
@@ -237,6 +245,7 @@ export class Scheduler {
       state: task.state,
       result: task.result ? [...task.result] : null,
       exception: task.exception,
+      warnings: [...task.warnings],
       progress: [...task.progress],
       workerIndex: task.workerIndex,
       tsQueued: task.tsQueued,

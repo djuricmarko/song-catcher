@@ -26,6 +26,15 @@ export type DeezerService = Pick<
 >;
 
 export type ProgressReporter = (current: number, maximum: number) => void;
+export type WarningReporter = (message: string) => void;
+
+function songLabel(song: DeezerSong): string {
+  return `${song.ART_NAME || 'unknown artist'} - ${song.SNG_TITLE || song.SNG_ID}`;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export class DownloadError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -68,6 +77,7 @@ export class DownloadService {
     addToPlaylist: boolean,
     createZip: boolean,
     onProgress?: ProgressReporter,
+    onWarning?: WarningReporter,
   ): Promise<string[]> {
     const songs = await this.deezer.getSongInfosFromWebsite(TYPE_ALBUM, albumId);
     const files: string[] = [];
@@ -81,6 +91,7 @@ export class DownloadService {
           { err: error, albumId, songId: song.SNG_ID },
           'could not download album song; continuing',
         );
+        onWarning?.(`Could not download "${songLabel(song)}": ${errorText(error)}`);
       }
     }
     onProgress?.(songs.length, songs.length);
@@ -101,6 +112,7 @@ export class DownloadService {
     addToPlaylist: boolean,
     createZip: boolean,
     onProgress?: ProgressReporter,
+    onWarning?: WarningReporter,
   ): Promise<string[]> {
     const playlist = await this.deezer.parseDeezerPlaylist(playlistUrl);
     if (playlist.songs.length === 0) {
@@ -117,6 +129,7 @@ export class DownloadService {
           { err: error, playlist: playlist.name, songId: song.SNG_ID },
           'could not download playlist song; continuing',
         );
+        onWarning?.(`Could not download "${songLabel(song)}": ${errorText(error)}`);
       }
     }
     onProgress?.(playlist.songs.length, playlist.songs.length);
@@ -139,6 +152,7 @@ export class DownloadService {
     addToPlaylist: boolean,
     createZip: boolean,
     onProgress?: ProgressReporter,
+    onWarning?: WarningReporter,
   ): Promise<string[]> {
     const favoriteSongIds = await this.deezer.getDeezerFavorites(userId);
     if (favoriteSongIds.length === 0) {
@@ -157,6 +171,7 @@ export class DownloadService {
           { err: error, userId, songId },
           'could not download favorite song; continuing',
         );
+        onWarning?.(`Could not download song ${songId}: ${errorText(error)}`);
       }
     }
     onProgress?.(favoriteSongIds.length, favoriteSongIds.length);

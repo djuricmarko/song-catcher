@@ -130,6 +130,31 @@ describe('DownloadService', () => {
     expect(progress.at(-1)).toEqual([2, 2]);
   });
 
+  it('reports songs that failed while the rest of the album succeeds', async () => {
+    const { service } = makeService({
+      getSongInfosFromWebsite: (async () => [
+        makeSong({ SNG_ID: '1', SNG_TITLE: 'Good', TRACK_NUMBER: '1' }),
+        makeSong({ SNG_ID: '2', SNG_TITLE: 'Bad', TRACK_NUMBER: '2' }),
+      ]) as unknown as DeezerService['getSongInfosFromWebsite'],
+      downloadSong: async (song: DeezerSong, outputFile: string) => {
+        if (song.SNG_ID === '2') {
+          throw new Error('not available in your country');
+        }
+        await writeFile(outputFile, 'audio');
+        return { format: 'MP3_128', extension: 'mp3' };
+      },
+    });
+    const downloads = new DownloadService(config, service, logger);
+    const warnings: string[] = [];
+
+    const files = await downloads.downloadAlbum('1', false, false, undefined, (message) => {
+      warnings.push(message);
+    });
+
+    expect(files).toHaveLength(1);
+    expect(warnings).toEqual(['Could not download "Artist - Bad": not available in your country']);
+  });
+
   it('creates an m3u8 file for playlists', async () => {
     const songs = [
       makeSong({ SNG_ID: '1', SNG_TITLE: 'First' }),
