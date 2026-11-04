@@ -176,6 +176,22 @@ describe('DeezerClient search', () => {
     expect(results[0]?.album_id).toBe(3);
   });
 
+  it('uses the album for album tracks that lack an album object', async () => {
+    nock('https://api.deezer.com')
+      .get('/album/3')
+      .reply(200, {
+        id: 3,
+        title: 'Album',
+        cover_small: 'cover',
+        tracks: { data: [{ id: 1, title: 'Song', artist: { id: 2, name: 'Artist' } }] },
+      });
+
+    const results = await makeClient().deezerSearch('3', 'album_track');
+    expect(results).toEqual([
+      expect.objectContaining({ id: '1', album: 'Album', album_id: 3, img_url: 'cover' }),
+    ]);
+  });
+
   it('surfaces API errors', async () => {
     nock('https://api.deezer.com')
       .get('/search/track')

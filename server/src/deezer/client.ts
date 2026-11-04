@@ -16,6 +16,7 @@ import {
   extractAppState,
   extractPlaylistId,
   mapSearchResult,
+  type AlbumContext,
   type DeezerApiError,
   type SearchResponse,
 } from './parse.js';
@@ -468,8 +469,10 @@ export class DeezerClient {
     }
 
     const data = searchType === TYPE_ALBUM_TRACK ? (body.tracks?.data ?? []) : (body.data ?? []);
+    // For album tracks the album itself is the response body.
+    const albumContext = searchType === TYPE_ALBUM_TRACK ? (body as AlbumContext) : undefined;
 
-    return data.map((item) => mapSearchResult(item, searchType));
+    return data.flatMap((item) => mapSearchResult(item, searchType, albumContext) ?? []);
   }
 
   public async parseDeezerPlaylist(playlistIdOrUrl: string): Promise<PlaylistResult> {

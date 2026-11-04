@@ -22,25 +22,27 @@ export interface SearchResponse {
   error?: DeezerApiError | string;
 }
 
+// The public API omits fields depending on the endpoint (e.g. album tracks
+// may lack `album`), so treat everything as optional.
 interface DeezerApiTrack {
-  id: number;
-  title: string;
-  preview: string;
-  artist: { id: number; name: string };
-  album: { id: number; title: string; cover_small: string };
+  id?: number;
+  title?: string;
+  preview?: string;
+  artist?: { id?: number; name?: string };
+  album?: { id?: number; title?: string; cover_small?: string };
 }
 
 interface DeezerApiAlbum {
-  id: number;
-  title: string;
-  cover_small: string;
-  artist?: { name: string };
+  id?: number;
+  title?: string;
+  cover_small?: string;
+  artist?: { name?: string };
 }
 
 interface DeezerApiArtist {
-  id: number;
-  name: string;
-  picture_small: string;
+  id?: number;
+  name?: string;
+  picture_small?: string;
 }
 
 export function errorMessage(error: unknown): string {
@@ -91,15 +93,30 @@ export function extractPlaylistId(value: string): string | undefined {
   return match?.[1];
 }
 
-export function mapSearchResult(item: unknown, searchType: SearchType): SearchResult {
+/** Album context used to fill in tracks that come without an `album` object. */
+export interface AlbumContext {
+  id?: number;
+  title?: string;
+  cover_small?: string;
+}
+
+export function mapSearchResult(
+  item: unknown,
+  searchType: SearchType,
+  albumContext?: AlbumContext,
+): SearchResult | undefined {
+  if (typeof item !== 'object' || item === null || !('id' in item)) {
+    return undefined;
+  }
+
   if (searchType === TYPE_ALBUM || searchType === TYPE_ARTIST_ALBUM) {
     const album = item as DeezerApiAlbum;
     return {
       id: String(album.id),
       id_type: TYPE_ALBUM,
-      album: album.title,
-      album_id: album.id,
-      img_url: album.cover_small,
+      album: album.title ?? '',
+      album_id: album.id ?? '',
+      img_url: album.cover_small ?? '',
       title: '',
       preview_url: '',
       artist: album.artist?.name ?? '',
@@ -112,15 +129,16 @@ export function mapSearchResult(item: unknown, searchType: SearchType): SearchRe
     searchType === TYPE_ALBUM_TRACK
   ) {
     const track = item as DeezerApiTrack;
+    const album = track.album ?? albumContext;
     return {
       id: String(track.id),
       id_type: TYPE_TRACK,
-      title: track.title,
-      img_url: track.album.cover_small,
-      album: track.album.title,
-      album_id: track.album.id,
-      artist: track.artist.name,
-      preview_url: track.preview,
+      title: track.title ?? '',
+      img_url: album?.cover_small ?? albumContext?.cover_small ?? '',
+      album: album?.title ?? albumContext?.title ?? '',
+      album_id: album?.id ?? albumContext?.id ?? '',
+      artist: track.artist?.name ?? '',
+      preview_url: track.preview ?? '',
     };
   }
 
@@ -129,11 +147,11 @@ export function mapSearchResult(item: unknown, searchType: SearchType): SearchRe
     id: String(artist.id),
     id_type: TYPE_ARTIST,
     title: '',
-    img_url: artist.picture_small,
+    img_url: artist.picture_small ?? '',
     album: '',
     album_id: '',
-    artist: artist.name,
-    artist_id: artist.id,
+    artist: artist.name ?? '',
+    artist_id: artist.id ?? '',
     preview_url: '',
   };
 }

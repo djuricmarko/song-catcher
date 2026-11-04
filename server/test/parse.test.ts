@@ -79,6 +79,34 @@ describe('mapSearchResult', () => {
     ).toMatchObject({ id: '3', id_type: 'album', album: 'Album', artist: 'Artist' });
   });
 
+  it('does not crash on tracks without album or artist objects', () => {
+    expect(mapSearchResult({ id: 1, title: 'Song' }, 'album_track')).toEqual({
+      id: '1',
+      id_type: 'track',
+      title: 'Song',
+      img_url: '',
+      album: '',
+      album_id: '',
+      artist: '',
+      preview_url: '',
+    });
+  });
+
+  it('fills album tracks from the album context', () => {
+    expect(
+      mapSearchResult({ id: 1, title: 'Song' }, 'album_track', {
+        id: 3,
+        title: 'Album',
+        cover_small: 'cover',
+      }),
+    ).toMatchObject({ album: 'Album', album_id: 3, img_url: 'cover' });
+  });
+
+  it('skips items that are not objects with an id', () => {
+    expect(mapSearchResult(null, 'track')).toBeUndefined();
+    expect(mapSearchResult({ title: 'no id' }, 'track')).toBeUndefined();
+  });
+
   it('maps artists', () => {
     expect(
       mapSearchResult({ id: 2, name: 'Artist', picture_small: 'picture' }, 'artist'),
