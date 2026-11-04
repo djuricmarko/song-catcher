@@ -58,4 +58,8 @@ USER deezer
 
 EXPOSE 5000
 
+# /api/health stays reachable without credentials even when DEEZER_AUTH_* is set.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD node -e "const prefix = (process.env.DEEZER_URL_PREFIX || '').replace(/^\/+|\/+$/g, ''); fetch('http://127.0.0.1:' + (process.env.DEEZER_HTTP_PORT || 5000) + (prefix ? '/' + prefix : '') + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+
 CMD ["node", "server/dist/cli.js"]
