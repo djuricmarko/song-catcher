@@ -13,7 +13,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "dev": "npm run build -w @deezer-downloader/shared && concurrently --kill-others-on-fail --names server,web,info --prefix-colors blue,magenta,green \"npm run dev -w @deezer-downloader/server\" \"npm run dev -w @deezer-downloader/web\" \"node -e \\\"setTimeout(() => console.log('\\\\n  Frontend ready at: http://localhost:5173\\\\n  Backend API at:    http://localhost:5000\\\\n'), 3000)\\\"\"",
+    "build:shared": "npm run build -w @deezer-downloader/shared",
+    "dev:server": "npm run build:shared && npm run dev -w @deezer-downloader/server",
+    "dev:web": "npm run build:shared && npm run dev -w @deezer-downloader/web",
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",
