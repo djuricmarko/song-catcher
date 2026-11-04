@@ -2,22 +2,20 @@
 
 FROM node:24-alpine AS build
 
-RUN npm install --global pnpm@10.24.0
-
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
 
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 COPY shared shared
 COPY server server
 COPY web web
 
-RUN pnpm build
+RUN npm run build
 
 
 FROM node:24-alpine AS runtime
@@ -31,17 +29,15 @@ RUN apk add --no-cache ffmpeg flac yt-dlp \
     && mkdir -p /mnt/deezer-downloader \
     && chown deezer:deezer /mnt/deezer-downloader
 
-RUN npm install --global pnpm@10.24.0
-
 WORKDIR /app
 
 # Install only production dependencies. Workspace symlinks are preserved so
 # @deezer-downloader/shared resolves to /app/shared at runtime.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
-RUN pnpm install --prod --frozen-lockfile \
+RUN npm ci --omit=dev --workspace @deezer-downloader/server \
     && npm cache clean --force
 
 COPY --from=build /app/shared/dist ./shared/dist

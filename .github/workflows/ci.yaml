@@ -17,31 +17,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg flac
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.24.0
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: npm run typecheck
 
       - name: Test
-        run: pnpm test
+        run: npm test
 
       - name: Lint
-        run: pnpm lint
+        run: npm run lint
 
       - name: Check formatting
-        run: pnpm format:check
+        run: npm run format:check

@@ -3,21 +3,26 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.24.0",
   "engines": {
     "node": ">=22.9"
   },
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
   "scripts": {
-    "build": "pnpm -r build",
-    "dev": "pnpm --filter @deezer-downloader/shared build && pnpm --parallel --filter @deezer-downloader/server --filter @deezer-downloader/web dev",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
+    "build": "npm run build --workspaces",
+    "dev": "npm run build -w @deezer-downloader/shared && concurrently --kill-others-on-fail --names server,web,info --prefix-colors blue,magenta,green \"npm run dev -w @deezer-downloader/server\" \"npm run dev -w @deezer-downloader/web\" \"node -e \\\"setTimeout(() => console.log('\\\\n  Frontend ready at: http://localhost:5173\\\\n  Backend API at:    http://localhost:5000\\\\n'), 3000)\\\"\"",
+    "test": "npm run test --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "concurrently": "^9.2.1",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",
     "typescript": "^5.9.3",

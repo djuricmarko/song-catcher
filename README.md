@@ -26,7 +26,7 @@ It will be removed in 4.0.0.
 ## Requirements
 
 - Node.js **22.9 or newer** (Node 24 is recommended).
-- pnpm 10 (`corepack enable` is the easiest way to get it).
+- npm 10 or newer (bundled with Node.js).
 - `ffmpeg` and `yt-dlp` for YouTube downloads.
 - `metaflac` from the `flac` package for FLAC tagging. The app checks for it at startup.
 
@@ -36,8 +36,7 @@ It will be removed in 4.0.0.
 git clone https://github.com/kmille/deezer-downloader.git
 cd deezer-downloader
 
-corepack enable
-pnpm install
+npm install
 cp .env.example .env
 ```
 
@@ -50,7 +49,7 @@ DEEZER_COOKIE_ARL=your_arl_cookie
 Then build and start the app:
 
 ```bash
-pnpm build
+npm run build
 node --env-file=.env server/dist/cli.js
 ```
 
@@ -59,10 +58,10 @@ Open <http://127.0.0.1:5000>.
 For development, run the backend and Vite dev server together:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
-Vite serves the UI on <http://127.0.0.1:5173> and proxies `/api` and `/downloads` to the backend on
+Then open <http://localhost:5173>. Vite serves the UI there and proxies `/api` and `/downloads` to the backend on
 port 5000.
 
 ## Getting your ARL cookie
@@ -175,14 +174,14 @@ that path.
 ## Development
 
 ```bash
-pnpm install
-pnpm dev          # backend + Vite with hot reload
-pnpm build        # shared types, backend and frontend production build
-pnpm test         # Vitest suites
-pnpm typecheck    # strict TypeScript checks
-pnpm lint         # ESLint
-pnpm format       # Prettier
-pnpm format:check # Prettier check for CI
+npm install
+npm run dev          # backend + Vite with hot reload (UI at http://localhost:5173)
+npm run build        # shared types, backend and frontend production build
+npm test             # Vitest suites
+npm run typecheck    # strict TypeScript checks
+npm run lint         # ESLint
+npm run format       # Prettier
+npm run format:check # Prettier check for CI
 ```
 
 Tests use mocked Deezer responses and temporary directories. They do not require a real ARL. Live
