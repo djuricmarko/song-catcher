@@ -44,6 +44,23 @@ const PICTURE_CACHE_SIZE = 16;
 
 export type SoundFormat = 'FLAC' | 'MP3_320' | 'MP3_128';
 
+const SOUND_FORMATS: readonly SoundFormat[] = ['FLAC', 'MP3_320', 'MP3_128'];
+
+export function extensionForFormat(format: SoundFormat): 'flac' | 'mp3' {
+  return format === 'FLAC' ? 'flac' : 'mp3';
+}
+
+export interface SongSource {
+  url: string;
+  /** The format Deezer actually returned; may be lower than requested. */
+  format: SoundFormat;
+}
+
+export interface DownloadedSong {
+  format: SoundFormat;
+  extension: 'flac' | 'mp3';
+}
+
 export class Deezer404Exception extends Error {
   public constructor(message: string) {
     super(message);
@@ -66,6 +83,7 @@ export class DeezerApiException extends Error {
 }
 
 interface WebSoundQuality {
+  high?: boolean;
   lossless?: boolean;
 }
 
@@ -74,6 +92,7 @@ interface UserDataResults {
   USER?: {
     OPTIONS?: {
       license_token?: string;
+      web_hq?: boolean;
       web_sound_quality?: WebSoundQuality;
     };
   };
@@ -109,6 +128,7 @@ interface GetUrlSource {
 }
 
 interface GetUrlMedia {
+  format?: string;
   sources?: GetUrlSource[];
 }
 
@@ -125,7 +145,8 @@ export class DeezerClient {
   private readonly http: Got;
   private readonly jar: CookieJar;
   private licenseToken = '';
-  private soundFormat: SoundFormat = 'MP3_128';
+  /** Formats to request, best first; Deezer returns the best one available per track. */
+  private soundFormats: SoundFormat[] = ['MP3_128'];
   private initialized = false;
   private readonly pictureCache = new Map<string, Promise<Buffer | undefined>>();
 
@@ -171,25 +192,26 @@ export class DeezerClient {
     return this.initialized;
   }
 
+  /** The preferred format; individual tracks may fall back to a lower one. */
   public get currentSoundFormat(): SoundFormat {
-    return this.soundFormat;
+    return this.soundFormats[0] ?? 'MP3_128';
   }
 
   public get fileExtension(): 'flac' | 'mp3' {
-    return this.soundFormat === 'FLAC' ? 'flac' : 'mp3';
+    return extensionForFormat(this.currentSoundFormat);
   }
 
   public async init(): Promise<void> {
     await this.setCookies();
     const userData = await this.getUserData();
     this.licenseToken = userData.licenseToken;
-    this.setSongQuality(userData.webSoundQuality);
+    this.setSongQuality(userData.webSoundQuality, userData.webHq);
     this.initialized = true;
 
     this.logger.info(
       {
-        soundFormat: this.soundFormat,
-        flacSupported: this.soundFormat === 'FLAC',
+        soundFormats: this.soundFormats,
+        flacSupported: this.currentSoundFormat === 'FLAC',
       },
       'Deezer session initialized',
     );
@@ -212,6 +234,7 @@ export class DeezerClient {
   private async getUserData(): Promise<{
     licenseToken: string;
     webSoundQuality: WebSoundQuality;
+    webHq: boolean;
   }> {
     let body: UserDataResponse;
     try {
@@ -232,21 +255,26 @@ export class DeezerClient {
       );
     }
 
-    return { licenseToken, webSoundQuality };
+    return { licenseToken, webSoundQuality, webHq: options.web_hq === true };
   }
 
-  private setSongQuality(webSoundQuality: WebSoundQuality): void {
-    if (webSoundQuality.lossless === true) {
-      this.soundFormat = this.config.deezer.quality === 'flac' ? 'FLAC' : 'MP3_320';
-      return;
-    }
+  private setSongQuality(webSoundQuality: WebSoundQuality, webHq: boolean): void {
+    const lossless = webSoundQuality.lossless === true;
+    const high = lossless || webSoundQuality.high === true || webHq;
 
-    if (this.config.deezer.quality === 'flac') {
+    if (this.config.deezer.quality === 'flac' && !lossless) {
       this.logger.warn(
         'DEEZER_QUALITY=flac is configured, but the Deezer account does not support lossless. Falling back to mp3.',
       );
     }
-    this.soundFormat = 'MP3_128';
+
+    if (this.config.deezer.quality === 'flac' && lossless) {
+      this.soundFormats = ['FLAC', 'MP3_320', 'MP3_128'];
+    } else if (high) {
+      this.soundFormats = ['MP3_320', 'MP3_128'];
+    } else {
+      this.soundFormats = ['MP3_128'];
+    }
   }
 
   public async getSongInfosFromWebsite(
@@ -510,7 +538,7 @@ export class DeezerClient {
     return ids;
   }
 
-  public async getSongUrl(trackToken: string): Promise<string> {
+  public async getSongUrl(trackToken: string): Promise<SongSource> {
     let response: { statusCode: number; body: unknown };
     try {
       response = await this.http.post(MEDIA_URL, {
@@ -519,7 +547,7 @@ export class DeezerClient {
           media: [
             {
               type: 'FULL',
-              formats: [{ cipher: 'BF_CBC_STRIPE', format: this.soundFormat }],
+              formats: this.soundFormats.map((format) => ({ cipher: 'BF_CBC_STRIPE', format })),
             },
           ],
           track_tokens: [trackToken],
@@ -553,21 +581,34 @@ export class DeezerClient {
       );
     }
 
-    const url = entry.media?.[0]?.sources?.[0]?.url;
+    const media = entry.media?.[0];
+    const url = media?.sources?.[0]?.url;
     if (!url) {
       throw new DeezerApiException(
         `Could not get download URL from API. There was no API error, but also no song information. API response: ${JSON.stringify(body)}`,
       );
     }
-    return url;
+
+    const format = SOUND_FORMATS.find((candidate) => candidate === media?.format);
+    if (!format) {
+      this.logger.warn(
+        { returned: media?.format, requested: this.soundFormats },
+        'Deezer did not report the media format; assuming the preferred one',
+      );
+    }
+    return { url, format: format ?? this.currentSoundFormat };
   }
 
-  public async downloadSong(song: DeezerSong, outputFile: string): Promise<void> {
+  /**
+   * Downloads and tags a song. The returned format tells the caller which
+   * extension the file needs, since Deezer may fall back to a lower quality.
+   */
+  public async downloadSong(song: DeezerSong, outputFile: string): Promise<DownloadedSong> {
     let resolvedSong = song;
-    let url: string;
+    let source: SongSource;
 
     try {
-      url = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
+      source = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
     } catch (error) {
       if (!resolvedSong.FALLBACK) {
         throw error;
@@ -577,13 +618,13 @@ export class DeezerClient {
         'primary song unavailable, trying fallback',
       );
       resolvedSong = resolvedSong.FALLBACK;
-      url = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
+      source = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
     }
 
     const key = calcBfKey(resolvedSong.SNG_ID);
     try {
       await pipeline(
-        this.http.stream(url),
+        this.http.stream(source.url),
         createDecryptTransform(key),
         createWriteStream(outputFile),
       );
@@ -599,7 +640,7 @@ export class DeezerClient {
     const picture = await this.getCachedPicture(resolvedSong.ALB_PICTURE);
     try {
       await writeSongMetadata(outputFile, resolvedSong, {
-        isFlac: this.fileExtension === 'flac',
+        isFlac: source.format === 'FLAC',
         picture,
         metaflacPath: this.config.tools.metaflacPath,
       });
@@ -610,7 +651,17 @@ export class DeezerClient {
       );
     }
 
-    this.logger.info({ file: outputFile, songId: resolvedSong.SNG_ID }, 'download finished');
+    if (source.format !== this.currentSoundFormat) {
+      this.logger.info(
+        { songId: resolvedSong.SNG_ID, preferred: this.currentSoundFormat, actual: source.format },
+        'song is not available in the preferred format; downloaded a lower quality',
+      );
+    }
+    this.logger.info(
+      { file: outputFile, songId: resolvedSong.SNG_ID, format: source.format },
+      'download finished',
+    );
+    return { format: source.format, extension: extensionForFormat(source.format) };
   }
 
   /**

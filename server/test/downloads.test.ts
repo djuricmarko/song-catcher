@@ -51,6 +51,7 @@ afterEach(async () => {
 function makeService(overrides: Partial<DeezerService> = {}) {
   const downloadSong = vi.fn(async (_song: DeezerSong, outputFile: string) => {
     await writeFile(outputFile, 'audio');
+    return { format: 'MP3_128' as const, extension: 'mp3' as const };
   });
   const service: DeezerService = {
     deezerSearch: async () => [],
@@ -67,6 +68,22 @@ function makeService(overrides: Partial<DeezerService> = {}) {
 }
 
 describe('DownloadService', () => {
+  it('names the file after the format Deezer actually returned', async () => {
+    const { service } = makeService({
+      fileExtension: 'flac',
+      downloadSong: async (_song: DeezerSong, outputFile: string) => {
+        await writeFile(outputFile, 'audio');
+        return { format: 'MP3_320', extension: 'mp3' };
+      },
+    });
+    const downloads = new DownloadService(config, service, logger);
+
+    const files = await downloads.downloadTrack('1', false);
+
+    expect(files).toEqual([path.join(baseDirectory, 'songs', 'Artist - Song.mp3')]);
+    expect(await readFile(files[0]!, 'utf8')).toBe('audio');
+  });
+
   it('downloads a single track into the songs directory', async () => {
     const { service } = makeService();
     const downloads = new DownloadService(config, service, logger);

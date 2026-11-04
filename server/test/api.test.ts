@@ -50,7 +50,7 @@ function createFakeDeezer(): DeezerClient {
     parseDeezerPlaylist: async () => ({ name: 'Playlist', songs: [song] }),
     getDeezerFavorites: async () => ['123'],
     getSongInfosFromWebsite: async () => song,
-    downloadSong: async () => undefined,
+    downloadSong: async () => ({ format: 'MP3_128', extension: 'mp3' }),
     downloadPicture: async () => Buffer.from('cover'),
     testLogin: async () => true,
     fileExtension: 'mp3',

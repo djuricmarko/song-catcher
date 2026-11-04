@@ -87,6 +87,28 @@ describe('DeezerClient.init', () => {
     expect(client.currentSoundFormat).toBe('MP3_128');
   });
 
+  it('uses MP3_320 for high-quality accounts without lossless', async () => {
+    nock('https://www.deezer.com')
+      .get('/ajax/gw-light.php')
+      .query(userDataUrl)
+      .reply(200, {
+        results: {
+          USER: {
+            OPTIONS: {
+              license_token: 'license',
+              web_sound_quality: { high: true, lossless: false },
+            },
+          },
+        },
+      });
+
+    const client = makeClient();
+    await client.init();
+
+    expect(client.currentSoundFormat).toBe('MP3_320');
+    expect(client.fileExtension).toBe('mp3');
+  });
+
   it('rejects missing license data', async () => {
     nock('https://www.deezer.com')
       .get('/ajax/gw-light.php')
@@ -287,13 +309,49 @@ describe('DeezerClient playlist and favorites', () => {
     nock('https://media.deezer.com')
       .post('/v1/get_url', (body) => body.track_tokens[0] === 'track-token')
       .reply(200, {
-        data: [{ media: [{ sources: [{ url: 'https://cdn/song.mp3' }] }] }],
+        data: [{ media: [{ format: 'MP3_128', sources: [{ url: 'https://cdn/song.mp3' }] }] }],
       });
 
     const client = makeClient();
     await client.init();
-    const url = await client.getSongUrl('track-token');
-    expect(url).toBe('https://cdn/song.mp3');
+    const source = await client.getSongUrl('track-token');
+    expect(source).toEqual({ url: 'https://cdn/song.mp3', format: 'MP3_128' });
+  });
+
+  it('requests fallback formats and reports the one Deezer returned', async () => {
+    nock('https://www.deezer.com')
+      .get('/ajax/gw-light.php')
+      .query(userDataUrl)
+      .reply(200, {
+        results: {
+          USER: {
+            OPTIONS: {
+              license_token: 'license',
+              web_sound_quality: { high: true, lossless: true },
+            },
+          },
+        },
+      });
+    let requestedFormats: unknown;
+    nock('https://media.deezer.com')
+      .post('/v1/get_url', (body) => {
+        requestedFormats = body.media[0].formats;
+        return true;
+      })
+      .reply(200, {
+        data: [{ media: [{ format: 'MP3_320', sources: [{ url: 'https://cdn/song' }] }] }],
+      });
+
+    const client = makeClient();
+    await client.init();
+    const source = await client.getSongUrl('track-token');
+
+    expect(requestedFormats).toEqual([
+      { cipher: 'BF_CBC_STRIPE', format: 'FLAC' },
+      { cipher: 'BF_CBC_STRIPE', format: 'MP3_320' },
+      { cipher: 'BF_CBC_STRIPE', format: 'MP3_128' },
+    ]);
+    expect(source.format).toBe('MP3_320');
   });
 });
 
@@ -325,7 +383,9 @@ describe('DeezerClient.downloadSong', () => {
     nock('https://media.deezer.com')
       .post('/v1/get_url')
       .times(times)
-      .reply(200, { data: [{ media: [{ sources: [{ url: 'https://cdn.test/song' }] }] }] });
+      .reply(200, {
+        data: [{ media: [{ format: 'MP3_128', sources: [{ url: 'https://cdn.test/song' }] }] }],
+      });
     // Shorter than one 2048-byte block, so it passes through the decryptor unchanged.
     nock('https://cdn.test').get('/song').times(times).reply(200, 'audio');
   }

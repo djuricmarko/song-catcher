@@ -205,13 +205,19 @@ export class DownloadService {
     this.logger.info({ file: absoluteFilename, songId: song.SNG_ID }, 'downloading song');
     const temporaryFilename = `${absoluteFilename}.${randomUUID()}.part`;
     try {
-      await this.deezer.downloadSong(song, temporaryFilename);
-      await rename(temporaryFilename, absoluteFilename);
+      // Deezer may fall back to a lower quality (e.g. MP3 when a track has
+      // no FLAC), so the final name uses the extension actually downloaded.
+      const { extension } = await this.deezer.downloadSong(song, temporaryFilename);
+      const finalFilename =
+        extension === this.deezer.fileExtension
+          ? absoluteFilename
+          : path.join(directory, buildSongFilename(song, searchType, extension));
+      await rename(temporaryFilename, finalFilename);
+      return finalFilename;
     } catch (error) {
       await rm(temporaryFilename, { force: true }).catch(() => undefined);
       throw error;
     }
-    return absoluteFilename;
   }
 
   public async createM3u8File(files: string[]): Promise<string> {
