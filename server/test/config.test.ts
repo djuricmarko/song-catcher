@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ConfigError,
   checkEnvironment,
+  isLoopbackHost,
   isPathInside,
   loadConfig,
   normalizeUrlPrefix,
@@ -289,5 +290,43 @@ describe('checkEnvironment', () => {
     expect(report.errors).toEqual([
       'DEEZER_YTDLP_PATH: executable not found: /definitely/not/here',
     ]);
+  });
+});
+
+describe('authentication config', () => {
+  it('is disabled by default', () => {
+    expect(load().http.auth).toBeUndefined();
+  });
+
+  it('requires user and password together', () => {
+    expect(() => load({ DEEZER_AUTH_USER: 'me' })).toThrowError(/must be set together/);
+    expect(() => load({ DEEZER_AUTH_PASSWORD: 'secret' })).toThrowError(/must be set together/);
+  });
+
+  it('rejects a colon in the user name', () => {
+    expect(() => load({ DEEZER_AUTH_USER: 'a:b', DEEZER_AUTH_PASSWORD: 'x' })).toThrowError(
+      /must not contain/,
+    );
+  });
+
+  it('keeps the password untrimmed and redacts it', () => {
+    const config = load({ DEEZER_AUTH_USER: 'me', DEEZER_AUTH_PASSWORD: ' pass ' });
+    expect(config.http.auth).toEqual({ user: 'me', password: ' pass ' });
+    expect(JSON.stringify(redactConfig(config))).not.toContain(' pass ');
+  });
+
+  it('warns when listening publicly without authentication', async () => {
+    const directory = await makeTempDirectory();
+    const report = await checkEnvironment(
+      load({ DEEZER_HTTP_HOST: '0.0.0.0', DEEZER_DOWNLOAD_DIR: directory }),
+    );
+    expect(report.warnings.join('\n')).toMatch(/without authentication/);
+  });
+
+  it('recognizes loopback hosts', () => {
+    expect(isLoopbackHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackHost('localhost')).toBe(true);
+    expect(isLoopbackHost('::1')).toBe(true);
+    expect(isLoopbackHost('0.0.0.0')).toBe(false);
   });
 });

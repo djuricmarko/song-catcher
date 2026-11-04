@@ -73,7 +73,8 @@ port 5000.
 4. Copy the value into `DEEZER_COOKIE_ARL`.
 
 The ARL is a password-equivalent credential. Never commit it, log it, or expose the app to the
-internet without authentication. `--print-config` redacts it.
+internet without authentication: set `DEEZER_AUTH_USER` and `DEEZER_AUTH_PASSWORD`, or put it
+behind an authenticating reverse proxy. `--print-config` redacts both secrets.
 
 ## Configuration
 
@@ -89,6 +90,8 @@ manager, Docker, or systemd to set real environment variables.
 | `DEEZER_HTTP_HOST`          | `127.0.0.1`              | HTTP listen address. Use `0.0.0.0` in Docker.                                           |
 | `DEEZER_HTTP_PORT`          | `5000`                   | HTTP listen port.                                                                       |
 | `DEEZER_URL_PREFIX`         | empty                    | Reverse-proxy path prefix, for example `/deezer`.                                       |
+| `DEEZER_AUTH_USER`          | empty                    | HTTP Basic auth user. Set with `DEEZER_AUTH_PASSWORD` to require a login.               |
+| `DEEZER_AUTH_PASSWORD`      | empty                    | HTTP Basic auth password. `/api/health` stays public for health checks.                 |
 | `DEEZER_WORKERS`            | `4`                      | Number of download workers (1–32).                                                      |
 | `DEEZER_TASK_HISTORY`       | `500`                    | Maximum number of completed/failed tasks kept in memory.                                |
 | `DEEZER_DOWNLOAD_DIR`       | `/tmp/deezer-downloader` | Base download directory.                                                                |

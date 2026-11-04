@@ -17,6 +17,8 @@ export interface AppConfig {
     host: string;
     port: number;
     urlPrefix: string;
+    /** HTTP Basic credentials; undefined disables authentication. */
+    auth: { user: string; password: string } | undefined;
   };
   downloads: {
     baseDir: string;
@@ -147,6 +149,11 @@ const rawSchema = z.object({
       'must be a path such as /deezer',
     )
     .refine((value) => !value.includes('..'), 'must not contain ".."'),
+  DEEZER_AUTH_USER: optionalEnvText,
+  DEEZER_AUTH_PASSWORD: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value : undefined)),
   DEEZER_WORKERS: envInteger(4, 1, 32),
   DEEZER_TASK_HISTORY: envInteger(500, 10, 10000),
   DEEZER_DOWNLOAD_DIR: envText(DEFAULT_DOWNLOAD_DIR).refine(
@@ -246,6 +253,12 @@ export function loadConfig(
     : undefined;
 
   const issues: string[] = [];
+  if (Boolean(raw.DEEZER_AUTH_USER) !== Boolean(raw.DEEZER_AUTH_PASSWORD)) {
+    issues.push('DEEZER_AUTH_USER and DEEZER_AUTH_PASSWORD must be set together');
+  }
+  if (raw.DEEZER_AUTH_USER?.includes(':')) {
+    issues.push('DEEZER_AUTH_USER must not contain ":"');
+  }
   if (raw.DEEZER_MPD_ENABLED) {
     if (!musicDirRoot) {
       issues.push('DEEZER_MPD_MUSIC_DIR_ROOT is required when DEEZER_MPD_ENABLED=true');
@@ -273,6 +286,10 @@ export function loadConfig(
       host: raw.DEEZER_HTTP_HOST,
       port: raw.DEEZER_HTTP_PORT,
       urlPrefix: raw.DEEZER_URL_PREFIX,
+      auth:
+        raw.DEEZER_AUTH_USER && raw.DEEZER_AUTH_PASSWORD
+          ? Object.freeze({ user: raw.DEEZER_AUTH_USER, password: raw.DEEZER_AUTH_PASSWORD })
+          : undefined,
     }),
     downloads: Object.freeze(downloads),
     queue: Object.freeze({
@@ -306,7 +323,15 @@ export function redactConfig(config: AppConfig): unknown {
       ...config.deezer,
       cookieArl: config.deezer.cookieArl ? '[REDACTED]' : '',
     },
+    http: {
+      ...config.http,
+      auth: config.http.auth ? { user: config.http.auth.user, password: '[REDACTED]' } : undefined,
+    },
   };
+}
+
+export function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '::1' || /^127\./.test(host);
 }
 
 export function resolveExecutable(
@@ -378,6 +403,13 @@ export async function checkEnvironment(config: AppConfig): Promise<EnvironmentRe
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`cannot create or write directory ${directory}: ${message}`);
     }
+  }
+
+  if (!config.http.auth && !isLoopbackHost(config.http.host)) {
+    warnings.push(
+      `listening on ${config.http.host} without authentication; anyone who can reach this port can ` +
+        'start downloads and read logs. Set DEEZER_AUTH_USER and DEEZER_AUTH_PASSWORD.',
+    );
   }
 
   return { errors, warnings, tools, directories };

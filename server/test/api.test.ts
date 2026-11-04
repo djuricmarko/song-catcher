@@ -396,3 +396,62 @@ describe('URL prefix', () => {
     await prefixedScheduler.stop();
   });
 });
+
+describe('basic authentication', () => {
+  let authApp: Awaited<ReturnType<typeof createServer>>;
+  const credentials = (user: string, password: string) =>
+    `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`;
+
+  beforeEach(async () => {
+    const authConfig = loadConfig(
+      {
+        DEEZER_COOKIE_ARL: ARL,
+        DEEZER_DOWNLOAD_DIR: baseDirectory,
+        DEEZER_AUTH_USER: 'me',
+        DEEZER_AUTH_PASSWORD: 'secret',
+      },
+      { cwd: baseDirectory },
+    );
+    authApp = await createServer(authConfig, logger, {
+      deezer: createFakeDeezer(),
+      scheduler,
+      downloads: {} as DownloadService,
+    });
+    await authApp.ready();
+  });
+
+  afterEach(async () => {
+    await authApp.close();
+  });
+
+  it('rejects requests without valid credentials', async () => {
+    for (const url of ['/api/queue', '/api/debug', '/downloads/songs/song.mp3', '/']) {
+      const missing = await authApp.inject({ method: 'GET', url });
+      expect(missing.statusCode, url).toBe(401);
+      expect(missing.headers['www-authenticate']).toMatch(/^Basic realm=/);
+    }
+    const wrong = await authApp.inject({
+      method: 'GET',
+      url: '/api/queue',
+      headers: { authorization: credentials('me', 'wrong') },
+    });
+    expect(wrong.statusCode).toBe(401);
+  });
+
+  it('accepts valid credentials, including for downloads', async () => {
+    const headers = { authorization: credentials('me', 'secret') };
+    const queue = await authApp.inject({ method: 'GET', url: '/api/queue', headers });
+    expect(queue.statusCode).toBe(200);
+    const file = await authApp.inject({
+      method: 'GET',
+      url: '/downloads/songs/song.mp3',
+      headers,
+    });
+    expect(file.statusCode).toBe(200);
+  });
+
+  it('keeps the health endpoint public', async () => {
+    const health = await authApp.inject({ method: 'GET', url: '/api/health' });
+    expect(health.statusCode).toBe(200);
+  });
+});
