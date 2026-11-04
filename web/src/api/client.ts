@@ -78,10 +78,7 @@ export function startDownload(payload: DownloadRequest): Promise<TaskAcceptedRes
   return post<TaskAcceptedResponse>('/download', payload);
 }
 
-export function startYoutubeDownload(
-  url: string,
-  addToPlaylist: boolean,
-): Promise<TaskAcceptedResponse> {
+export function startYoutubeDownload(url: string, addToPlaylist: boolean): Promise<TaskAcceptedResponse> {
   return post<TaskAcceptedResponse>('/youtubedl', {
     url,
     add_to_playlist: addToPlaylist,

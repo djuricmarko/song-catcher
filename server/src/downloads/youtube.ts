@@ -111,9 +111,7 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
 
   const filename = parseYtDlpOutput(stdout);
   if (!filename) {
-    throw new YoutubeDlError(
-      `Could not extract the output file from yt-dlp.\nstdout: ${stdout}\nstderr: ${stderr}`,
-    );
+    throw new YoutubeDlError(`Could not extract the output file from yt-dlp.\nstdout: ${stdout}\nstderr: ${stderr}`);
   }
 
   try {

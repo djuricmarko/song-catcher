@@ -75,9 +75,7 @@ describe('buildSongFilename', () => {
   });
 
   it('handles a missing track number', () => {
-    expect(buildSongFilename({ ...song, TRACK_NUMBER: undefined }, 'album', 'mp3')).toBe(
-      'Artist Name Song Title.mp3',
-    );
+    expect(buildSongFilename({ ...song, TRACK_NUMBER: undefined }, 'album', 'mp3')).toBe('Artist Name Song Title.mp3');
   });
 });
 
@@ -94,12 +92,8 @@ describe('directories', () => {
       playlistsDir: '/downloads/playlists',
     };
     expect(songDirectory(base, 'track', song)).toBe('/downloads/songs');
-    expect(songDirectory(base, 'album', song)).toBe(
-      path.join('/downloads/albums', 'Album Artist - Album Name'),
-    );
-    expect(songDirectory(base, 'playlist', song, 'Favorites')).toBe(
-      '/downloads/playlists/Favorites',
-    );
+    expect(songDirectory(base, 'album', song)).toBe(path.join('/downloads/albums', 'Album Artist - Album Name'));
+    expect(songDirectory(base, 'playlist', song, 'Favorites')).toBe('/downloads/playlists/Favorites');
     expect(() => songDirectory(base, 'playlist', song)).toThrowError(/playlist name/);
   });
 });

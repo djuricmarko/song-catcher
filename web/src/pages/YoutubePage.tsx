@@ -39,8 +39,8 @@ export function YoutubePage() {
     <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <h1 className="text-xl font-semibold text-zinc-900">Download with yt-dlp</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Paste a YouTube, Invidious, Vimeo, SoundCloud or other yt-dlp-supported URL. The audio is
-        converted to MP3 and tagged by yt-dlp.
+        Paste a YouTube, Invidious, Vimeo, SoundCloud or other yt-dlp-supported URL. The audio is converted to MP3 and
+        tagged by yt-dlp.
       </p>
 
       <form onSubmit={onSubmit} className="mt-4 space-y-3">

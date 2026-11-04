@@ -79,11 +79,7 @@ describe('MpdClient', () => {
     await client.add('deezer/songs/song.mp3');
     client.close();
 
-    expect(fake.commands).toEqual([
-      'update',
-      'search file "deezer/songs/song.mp3"',
-      'add "deezer/songs/song.mp3"',
-    ]);
+    expect(fake.commands).toEqual(['update', 'search file "deezer/songs/song.mp3"', 'add "deezer/songs/song.mp3"']);
   });
 
   it('turns MPD ACK responses into errors', async () => {

@@ -4,12 +4,7 @@ import { buffer as consumeBuffer } from 'node:stream/consumers';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  BLOCK_SIZE,
-  calcBfKey,
-  createDecryptTransform,
-  decryptBlock,
-} from '../src/deezer/crypto.js';
+import { BLOCK_SIZE, calcBfKey, createDecryptTransform, decryptBlock } from '../src/deezer/crypto.js';
 
 const cipherBlock = Buffer.from(
   readFileSync(new URL('./fixtures/block-2048.b64', import.meta.url), 'utf8').trim(),

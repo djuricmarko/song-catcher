@@ -12,10 +12,7 @@ export type TaskArgs = Record<string, unknown>;
 /** Maps handler names to the argument shape each handler receives. */
 export type TaskArgsMap = Record<string, TaskArgs>;
 
-export type TaskHandler<Args extends TaskArgs = TaskArgs> = (
-  args: Args,
-  context: TaskContext,
-) => Promise<string[]>;
+export type TaskHandler<Args extends TaskArgs = TaskArgs> = (args: Args, context: TaskContext) => Promise<string[]>;
 
 export type TaskListener = (task: QueueTask) => void;
 export type TaskRemovedListener = (taskId: number) => void;
@@ -60,10 +57,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     private readonly logger: Logger,
   ) {}
 
-  public register<Name extends keyof Tasks & string>(
-    handlerName: Name,
-    handler: TaskHandler<Tasks[Name]>,
-  ): void {
+  public register<Name extends keyof Tasks & string>(handlerName: Name, handler: TaskHandler<Tasks[Name]>): void {
     if (this.handlers.has(handlerName)) {
       throw new Error(`Task handler already registered: ${handlerName}`);
     }
@@ -227,10 +221,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       } catch (error) {
         task.state = 'failed';
         task.exception = error instanceof Error ? error.message : String(error);
-        this.logger.error(
-          { err: error, taskId: task.id, handler: task.handlerName },
-          'download task failed',
-        );
+        this.logger.error({ err: error, taskId: task.id, handler: task.handlerName }, 'download task failed');
       } finally {
         task.tsFinished = Date.now();
         this.notify(task);
@@ -241,9 +232,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
 
   private trimHistory(): void {
     while (this.tasks.length > this.historyLimit) {
-      const index = this.tasks.findIndex(
-        (task) => task.state === 'mission accomplished' || task.state === 'failed',
-      );
+      const index = this.tasks.findIndex((task) => task.state === 'mission accomplished' || task.state === 'failed');
       if (index === -1) {
         return;
       }

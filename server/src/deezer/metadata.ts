@@ -42,11 +42,7 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
 }
 
-export async function writeSongMetadata(
-  outputFile: string,
-  song: DeezerSong,
-  options: MetadataOptions,
-): Promise<void> {
+export async function writeSongMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
   if (options.isFlac) {
     await writeFlacMetadata(outputFile, song, options);
     return;
@@ -54,11 +50,7 @@ export async function writeSongMetadata(
   await writeMp3Metadata(outputFile, song, options);
 }
 
-async function writeMp3Metadata(
-  outputFile: string,
-  song: DeezerSong,
-  options: MetadataOptions,
-): Promise<void> {
+async function writeMp3Metadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
   const tags: NodeID3.Tags = {
     artist: nonEmpty(song.ART_NAME),
     title: nonEmpty(song.SNG_TITLE),
@@ -94,14 +86,8 @@ async function writeMp3Metadata(
   }
 }
 
-async function writeFlacMetadata(
-  outputFile: string,
-  song: DeezerSong,
-  options: MetadataOptions,
-): Promise<void> {
-  const temporaryDirectory = options.picture
-    ? await mkdtemp(path.join(tmpdir(), 'deezer-cover-'))
-    : undefined;
+async function writeFlacMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
+  const temporaryDirectory = options.picture ? await mkdtemp(path.join(tmpdir(), 'deezer-cover-')) : undefined;
 
   try {
     const tags: Array<[string, string | undefined]> = [
@@ -133,10 +119,7 @@ async function writeFlacMetadata(
         env: childEnvironment(),
       });
     } catch (error) {
-      const stderr =
-        typeof error === 'object' && error !== null && 'stderr' in error
-          ? String(error.stderr)
-          : '';
+      const stderr = typeof error === 'object' && error !== null && 'stderr' in error ? String(error.stderr) : '';
       throw new MetadataError(
         `Could not write FLAC metadata with ${options.metaflacPath}: ${stderr || String(error)}`,
         { cause: error },

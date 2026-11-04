@@ -1,14 +1,7 @@
 import { load } from 'cheerio';
 
 import type { DeezerAppState, SearchResult, SearchType } from './types.js';
-import {
-  TYPE_ALBUM,
-  TYPE_ALBUM_TRACK,
-  TYPE_ARTIST,
-  TYPE_ARTIST_ALBUM,
-  TYPE_ARTIST_TOP,
-  TYPE_TRACK,
-} from './types.js';
+import { TYPE_ALBUM, TYPE_ALBUM_TRACK, TYPE_ARTIST, TYPE_ARTIST_ALBUM, TYPE_ARTIST_TOP, TYPE_TRACK } from './types.js';
 
 export interface DeezerApiError {
   message?: string;
@@ -155,11 +148,7 @@ export function mapSearchResult(
     };
   }
 
-  if (
-    searchType === TYPE_TRACK ||
-    searchType === TYPE_ARTIST_TOP ||
-    searchType === TYPE_ALBUM_TRACK
-  ) {
+  if (searchType === TYPE_TRACK || searchType === TYPE_ARTIST_TOP || searchType === TYPE_ALBUM_TRACK) {
     const track = item as DeezerApiTrack;
     const album = track.album ?? albumContext;
     return {

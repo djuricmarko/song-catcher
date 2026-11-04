@@ -44,10 +44,7 @@ function truncate(value: string, maxLength: number, maxBytes: number): string {
 export function cleanFilename(value: string, extension?: string): string {
   const suffix = extension ? `.${extension}` : '';
   const cleaned = truncate(
-    stripControlCharacters(value)
-      .replace(UNSAFE_FILENAME_CHARACTERS, '')
-      .replace(/\s+/g, ' ')
-      .trim(),
+    stripControlCharacters(value).replace(UNSAFE_FILENAME_CHARACTERS, '').replace(/\s+/g, ' ').trim(),
     MAX_FILENAME_LENGTH - suffix.length,
     MAX_FILENAME_BYTES - Buffer.byteLength(suffix, 'utf8'),
   ).trim();
@@ -57,11 +54,7 @@ export function cleanFilename(value: string, extension?: string): string {
   return `${cleaned}${suffix}`;
 }
 
-export function buildSongFilename(
-  song: DeezerSong,
-  searchType: SongPathType,
-  extension: 'mp3' | 'flac',
-): string {
+export function buildSongFilename(song: DeezerSong, searchType: SongPathType, extension: 'mp3' | 'flac'): string {
   const artist = song.ART_NAME || 'unknown artist';
   const title = song.SNG_TITLE || 'unknown title';
 
@@ -108,12 +101,7 @@ export function songDirectory(
 
 export function mpdRelativePath(musicDirRoot: string, absolutePath: string): string {
   const relative = path.relative(musicDirRoot, absolutePath);
-  if (
-    relative === '' ||
-    relative === '..' ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
+  if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`${absolutePath} is not inside DEEZER_MPD_MUSIC_DIR_ROOT`);
   }
   return relative.split(path.sep).join('/');

@@ -99,11 +99,7 @@ describe('writeSongMetadata', () => {
       metaflacPath: 'metaflac',
     });
 
-    const { stdout } = await execFileAsync('metaflac', [
-      '--list',
-      '--block-type=VORBIS_COMMENT',
-      output,
-    ]);
+    const { stdout } = await execFileAsync('metaflac', ['--list', '--block-type=VORBIS_COMMENT', output]);
     expect(stdout).toContain('TITLE=Test Song');
     expect(stdout).toContain('ARTIST=Test Artist');
     expect(stdout).toContain('ALBUM=Test Album');

@@ -8,12 +8,7 @@ import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
-import {
-  Deezer403Exception,
-  Deezer404Exception,
-  DeezerClient,
-  isDeezerShortLink,
-} from '../src/deezer/client.js';
+import { Deezer403Exception, Deezer404Exception, DeezerClient, isDeezerShortLink } from '../src/deezer/client.js';
 import type { DeezerSong } from '../src/deezer/types.js';
 
 const ARL = 'a'.repeat(192);
@@ -192,9 +187,7 @@ describe('DeezerClient search', () => {
       });
 
     const results = await makeClient().deezerSearch('3', 'album_track');
-    expect(results).toEqual([
-      expect.objectContaining({ id: '1', album: 'Album', album_id: 3, img_url: 'cover' }),
-    ]);
+    expect(results).toEqual([expect.objectContaining({ id: '1', album: 'Album', album_id: 3, img_url: 'cover' })]);
   });
 
   it('surfaces API errors', async () => {
@@ -243,14 +236,10 @@ describe('DeezerClient page parsing', () => {
 
   it('detects missing login and 404s', async () => {
     nock('https://www.deezer.com').get('/us/track/1').reply(200, '<html>login</html>');
-    await expect(makeClient().getSongInfosFromWebsite('track', '1')).rejects.toBeInstanceOf(
-      Deezer403Exception,
-    );
+    await expect(makeClient().getSongInfosFromWebsite('track', '1')).rejects.toBeInstanceOf(Deezer403Exception);
 
     nock('https://www.deezer.com').get('/us/track/2').reply(404);
-    await expect(makeClient().getSongInfosFromWebsite('track', '2')).rejects.toBeInstanceOf(
-      Deezer404Exception,
-    );
+    await expect(makeClient().getSongInfosFromWebsite('track', '2')).rejects.toBeInstanceOf(Deezer404Exception);
   });
 });
 
@@ -288,9 +277,7 @@ describe('DeezerClient playlist and favorites', () => {
         },
       });
 
-    const playlist = await makeClient().parseDeezerPlaylist(
-      'https://www.deezer.com/us/playlist/123',
-    );
+    const playlist = await makeClient().parseDeezerPlaylist('https://www.deezer.com/us/playlist/123');
 
     expect(playlist.name).toBe('Playlist');
     expect(playlist.songs).toHaveLength(1);
@@ -531,9 +518,7 @@ describe('DeezerClient session refresh', () => {
 
     const refresh = mockUserData('second');
     nock('https://www.deezer.com').get('/us/album/3').reply(200, '<html>login</html>');
-    await expect(client.getSongInfosFromWebsite('album', '3')).rejects.toBeInstanceOf(
-      Deezer403Exception,
-    );
+    await expect(client.getSongInfosFromWebsite('album', '3')).rejects.toBeInstanceOf(Deezer403Exception);
 
     nock('https://media.deezer.com')
       .post('/v1/get_url')
@@ -557,9 +542,9 @@ describe('isDeezerShortLink', () => {
 
   it('does not contact non-Deezer hosts that mention link.deezer.com', async () => {
     const evil = nock('https://evil.example').head('/').query(true).reply(200);
-    await expect(
-      makeClient().parseDeezerPlaylist('https://evil.example/?link.deezer.com'),
-    ).rejects.toThrowError(/playlist id/);
+    await expect(makeClient().parseDeezerPlaylist('https://evil.example/?link.deezer.com')).rejects.toThrowError(
+      /playlist id/,
+    );
     expect(evil.isDone()).toBe(false);
   });
 });

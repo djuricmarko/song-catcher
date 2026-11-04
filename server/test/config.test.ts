@@ -30,9 +30,7 @@ async function makeTempDirectory(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  );
+  await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe('loadConfig defaults', () => {
@@ -161,25 +159,17 @@ describe('loadConfig validation', () => {
 
   it('rejects unsupported proxy schemes', () => {
     expect(() => load({ DEEZER_PROXY_URL: 'http://proxy:8080' })).toThrowError(/DEEZER_PROXY_URL/);
-    expect(() => load({ DEEZER_PROXY_URL: 'socks4://proxy:1080' })).toThrowError(
-      /DEEZER_PROXY_URL/,
-    );
+    expect(() => load({ DEEZER_PROXY_URL: 'socks4://proxy:1080' })).toThrowError(/DEEZER_PROXY_URL/);
   });
 
   it('accepts supported proxy schemes', () => {
-    for (const proxy of [
-      'https://user:pass@proxy:8080',
-      'socks5://127.0.0.1:1080',
-      'socks5h://127.0.0.1:1080',
-    ]) {
+    for (const proxy of ['https://user:pass@proxy:8080', 'socks5://127.0.0.1:1080', 'socks5h://127.0.0.1:1080']) {
       expect(load({ DEEZER_PROXY_URL: proxy }).deezer.proxyUrl).toBe(proxy);
     }
   });
 
   it('requires an MPD music root when MPD is enabled', () => {
-    expect(() => load({ DEEZER_MPD_ENABLED: 'true' })).toThrowError(
-      /DEEZER_MPD_MUSIC_DIR_ROOT is required/,
-    );
+    expect(() => load({ DEEZER_MPD_ENABLED: 'true' })).toThrowError(/DEEZER_MPD_MUSIC_DIR_ROOT is required/);
   });
 
   it('rejects download directories outside the MPD music root', () => {
@@ -307,9 +297,7 @@ describe('checkEnvironment', () => {
     expect(mp3.warnings.join('\n')).toMatch(/FLAC files cannot be tagged/);
 
     const flac = await checkEnvironment(load({ ...env, DEEZER_QUALITY: 'flac' }));
-    expect(flac.errors).toEqual([
-      'DEEZER_METAFLAC_PATH: executable not found: /definitely/not/here',
-    ]);
+    expect(flac.errors).toEqual(['DEEZER_METAFLAC_PATH: executable not found: /definitely/not/here']);
   });
 });
 
@@ -324,9 +312,7 @@ describe('authentication config', () => {
   });
 
   it('rejects a colon in the user name', () => {
-    expect(() => load({ DEEZER_AUTH_USER: 'a:b', DEEZER_AUTH_PASSWORD: 'x' })).toThrowError(
-      /must not contain/,
-    );
+    expect(() => load({ DEEZER_AUTH_USER: 'a:b', DEEZER_AUTH_PASSWORD: 'x' })).toThrowError(/must not contain/);
   });
 
   it('keeps the password untrimmed and redacts it', () => {
@@ -337,9 +323,7 @@ describe('authentication config', () => {
 
   it('warns when listening publicly without authentication', async () => {
     const directory = await makeTempDirectory();
-    const report = await checkEnvironment(
-      load({ DEEZER_HTTP_HOST: '0.0.0.0', DEEZER_DOWNLOAD_DIR: directory }),
-    );
+    const report = await checkEnvironment(load({ DEEZER_HTTP_HOST: '0.0.0.0', DEEZER_DOWNLOAD_DIR: directory }));
     expect(report.warnings.join('\n')).toMatch(/without authentication/);
   });
 

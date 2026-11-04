@@ -19,10 +19,7 @@ function toPosix(value: string): string {
   return value.split(path.sep).join('/');
 }
 
-export async function listFiles(
-  baseDirectory: string,
-  requestedPath: string,
-): Promise<FilesResponse> {
+export async function listFiles(baseDirectory: string, requestedPath: string): Promise<FilesResponse> {
   if (requestedPath.includes('\0')) {
     throw new FileAccessError('invalid path', 400);
   }

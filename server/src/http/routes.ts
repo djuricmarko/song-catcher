@@ -1,22 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import type {
-  ApiErrorResponse,
-  DebugResponse,
-  QueueTask,
-  TaskAcceptedResponse,
-} from '@deezer-downloader/shared';
+import type { ApiErrorResponse, DebugResponse, QueueTask, TaskAcceptedResponse } from '@deezer-downloader/shared';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, RawServerDefault } from 'fastify';
 import type { Logger } from 'pino';
 import { z, type ZodType } from 'zod';
 
 import type { AppConfig } from '../config/env.js';
-import {
-  Deezer403Exception,
-  Deezer404Exception,
-  DeezerApiException,
-  type DeezerClient,
-} from '../deezer/client.js';
+import { Deezer403Exception, Deezer404Exception, DeezerApiException, type DeezerClient } from '../deezer/client.js';
 import type { DownloadService } from '../downloads/service.js';
 import type { DownloadScheduler } from '../queue/tasks.js';
 import { getDebugOutput } from './debug.js';
@@ -48,11 +38,7 @@ function parseBody<T>(schema: ZodType<T>, body: unknown): T {
   return result.data;
 }
 
-function handleApiError(
-  reply: FastifyReply,
-  error: unknown,
-  logger: FastifyBaseLogger,
-): FastifyReply {
+function handleApiError(reply: FastifyReply, error: unknown, logger: FastifyBaseLogger): FastifyReply {
   if (error instanceof ApiValidationError) {
     const body: ApiErrorResponse = { error: 'invalid request', details: error.details };
     return reply.code(400).send(body);
@@ -121,12 +107,7 @@ const filesQuerySchema = z.object({
   path: z.string().optional(),
 });
 
-export type ApiFastifyInstance = FastifyInstance<
-  RawServerDefault,
-  IncomingMessage,
-  ServerResponse,
-  Logger
->;
+export type ApiFastifyInstance = FastifyInstance<RawServerDefault, IncomingMessage, ServerResponse, Logger>;
 
 export async function registerApiRoutes(
   app: ApiFastifyInstance,
@@ -163,15 +144,11 @@ export async function registerApiRoutes(
               track_id: String(body.music_id),
               add_to_playlist: body.add_to_playlist,
             })
-          : services.scheduler.enqueue(
-              'Downloading album',
-              'download_deezer_album_and_queue_and_zip',
-              {
-                album_id: String(body.music_id),
-                add_to_playlist: body.add_to_playlist,
-                create_zip: body.create_zip,
-              },
-            );
+          : services.scheduler.enqueue('Downloading album', 'download_deezer_album_and_queue_and_zip', {
+              album_id: String(body.music_id),
+              add_to_playlist: body.add_to_playlist,
+              create_zip: body.create_zip,
+            });
       const response: TaskAcceptedResponse = { task_id: task.id };
       return reply.code(202).send(response);
     } catch (error) {
@@ -182,14 +159,10 @@ export async function registerApiRoutes(
   app.post(`${api}/youtubedl`, async (request, reply) => {
     try {
       const body = parseBody(youtubeSchema, request.body);
-      const task = services.scheduler.enqueue(
-        'Downloading via yt-dlp',
-        'download_youtubedl_and_queue',
-        {
-          video_url: body.url,
-          add_to_playlist: body.add_to_playlist,
-        },
-      );
+      const task = services.scheduler.enqueue('Downloading via yt-dlp', 'download_youtubedl_and_queue', {
+        video_url: body.url,
+        add_to_playlist: body.add_to_playlist,
+      });
       const response: TaskAcceptedResponse = { task_id: task.id };
       return reply.code(202).send(response);
     } catch (error) {
@@ -219,15 +192,11 @@ export async function registerApiRoutes(
   app.post(`${api}/favorites/deezer`, async (request, reply) => {
     try {
       const body = parseBody(favoritesSchema, request.body);
-      const task = services.scheduler.enqueue(
-        'Downloading Deezer favorites',
-        'download_deezer_favorites',
-        {
-          user_id: body.user_id,
-          add_to_playlist: body.add_to_playlist,
-          create_zip: body.create_zip,
-        },
-      );
+      const task = services.scheduler.enqueue('Downloading Deezer favorites', 'download_deezer_favorites', {
+        user_id: body.user_id,
+        add_to_playlist: body.add_to_playlist,
+        create_zip: body.create_zip,
+      });
       const response: TaskAcceptedResponse = { task_id: task.id };
       return reply.code(202).send(response);
     } catch (error) {

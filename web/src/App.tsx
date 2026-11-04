@@ -1,13 +1,4 @@
-import {
-  Bug,
-  FolderOpen,
-  ListMusic,
-  ListTodo,
-  Music2,
-  Search,
-  Video,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bug, FolderOpen, ListMusic, ListTodo, Music2, Search, Video, type LucideIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
@@ -43,10 +34,7 @@ function StatusBadge({ online }: { online: boolean }) {
         online ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
       }`}
     >
-      <span
-        className={`size-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`}
-        aria-hidden
-      />
+      <span className={`size-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-rose-500'}`} aria-hidden />
       {online ? 'backend online' : 'backend offline'}
     </span>
   );
@@ -102,9 +90,7 @@ export default function App() {
 
           <div className="ml-auto flex items-center gap-2">
             {config.data?.useMpd ? (
-              <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">
-                MPD enabled
-              </span>
+              <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">MPD enabled</span>
             ) : null}
             <StatusBadge online={Boolean(health.data) && !health.isError} />
           </div>
@@ -134,8 +120,7 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         {health.isError ? (
           <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-            Cannot reach the backend at <code className="font-mono text-xs">{API_ROOT}</code>. Is
-            the server running?
+            Cannot reach the backend at <code className="font-mono text-xs">{API_ROOT}</code>. Is the server running?
           </div>
         ) : null}
 

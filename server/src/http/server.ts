@@ -5,11 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import fastifyStatic from '@fastify/static';
-import type {
-  ApiConfigResponse,
-  ApiErrorResponse,
-  HealthResponse,
-} from '@deezer-downloader/shared';
+import type { ApiConfigResponse, ApiErrorResponse, HealthResponse } from '@deezer-downloader/shared';
 import Fastify, { type FastifyError } from 'fastify';
 import type { Logger } from 'pino';
 
@@ -40,10 +36,7 @@ function safeEqual(first: string, second: string): boolean {
 }
 
 /** Returns true when the Authorization header carries the configured credentials. */
-export function checkBasicAuth(
-  header: string | undefined,
-  expected: { user: string; password: string },
-): boolean {
+export function checkBasicAuth(header: string | undefined, expected: { user: string; password: string }): boolean {
   const match = /^Basic\s+([A-Za-z0-9+/=]+)\s*$/i.exec(header ?? '');
   if (!match?.[1]) {
     return false;
@@ -165,10 +158,7 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
       const body: ApiErrorResponse = { error: 'not found' };
       return reply.code(404).send(body);
     }
-    if (
-      request.url.startsWith(`${prefix}/assets/`) ||
-      request.url.startsWith(`${prefix}/downloads/`)
-    ) {
+    if (request.url.startsWith(`${prefix}/assets/`) || request.url.startsWith(`${prefix}/downloads/`)) {
       const body: ApiErrorResponse = { error: 'not found' };
       return reply.code(404).send(body);
     }
@@ -184,8 +174,7 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error({ err: error }, 'request failed');
-    const statusCode =
-      typeof error.statusCode === 'number' && error.statusCode >= 400 ? error.statusCode : 500;
+    const statusCode = typeof error.statusCode === 'number' && error.statusCode >= 400 ? error.statusCode : 500;
     const body: ApiErrorResponse = {
       error: statusCode >= 500 ? 'internal server error' : error.message,
     };

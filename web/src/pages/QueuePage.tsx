@@ -25,19 +25,14 @@ export function QueuePage() {
       <section className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-zinc-900">Download queue</h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            Live view of waiting, active and finished download tasks.
-          </p>
+          <p className="mt-1 text-sm text-zinc-600">Live view of waiting, active and finished download tasks.</p>
         </div>
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
             connected ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
           }`}
         >
-          <span
-            className={`size-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`}
-            aria-hidden
-          />
+          <span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden />
           {connected ? 'live' : 'reconnecting'}
         </span>
       </section>
@@ -85,17 +80,14 @@ export function QueuePage() {
               <tbody className="divide-y divide-zinc-100">
                 {[...tasks].reverse().map((task) => {
                   const [current, maximum] = task.progress;
-                  const percentage =
-                    maximum > 0 ? Math.min(100, Math.round((current / maximum) * 100)) : null;
+                  const percentage = maximum > 0 ? Math.min(100, Math.round((current / maximum) * 100)) : null;
 
                   return (
                     <tr key={task.id} className="align-top">
                       <td className="px-3 py-3 font-mono text-xs text-zinc-500">{task.id}</td>
                       <td className="px-3 py-3">
                         <p className="font-medium text-zinc-900">{task.description}</p>
-                        <p className="mt-0.5 text-xs text-zinc-500">
-                          worker {task.workerIndex ?? '—'}
-                        </p>
+                        <p className="mt-0.5 text-xs text-zinc-500">worker {task.workerIndex ?? '—'}</p>
                       </td>
                       <td className="px-3 py-3">
                         <TaskStateBadge state={task.state} />
@@ -117,8 +109,7 @@ export function QueuePage() {
                         {task.warnings.length > 0 ? (
                           <details className="mb-1 text-xs text-amber-800">
                             <summary className="cursor-pointer font-medium">
-                              {task.warnings.length} {task.warnings.length === 1 ? 'song' : 'songs'}{' '}
-                              failed
+                              {task.warnings.length} {task.warnings.length === 1 ? 'song' : 'songs'} failed
                             </summary>
                             <ul className="mt-1 space-y-0.5">
                               {task.warnings.map((warning, index) => (

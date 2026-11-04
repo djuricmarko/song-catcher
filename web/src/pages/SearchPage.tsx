@@ -139,8 +139,7 @@ export function SearchPage() {
       <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <h1 className="text-xl font-semibold text-zinc-900">Search Deezer</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Find tracks, albums and artists. Downloads are queued and can be followed on the Queue
-          page.
+          Find tracks, albums and artists. Downloads are queued and can be followed on the Queue page.
         </p>
 
         <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -163,9 +162,7 @@ export function SearchPage() {
             onChange={(event) => {
               setQuery(event.target.value);
             }}
-            placeholder={
-              mode === 'artist' ? 'Artist name' : mode === 'album' ? 'Album name' : 'Track name'
-            }
+            placeholder={mode === 'artist' ? 'Artist name' : mode === 'album' ? 'Album name' : 'Track name'}
             aria-label="Search query"
           />
           <Button type="submit" disabled={searching} className="sm:w-28">

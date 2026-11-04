@@ -87,10 +87,7 @@ export class DownloadService {
       try {
         files.push(await this.downloadSongToDisk(TYPE_ALBUM, song));
       } catch (error) {
-        this.logger.warn(
-          { err: error, albumId, songId: song.SNG_ID },
-          'could not download album song; continuing',
-        );
+        this.logger.warn({ err: error, albumId, songId: song.SNG_ID }, 'could not download album song; continuing');
         onWarning?.(`Could not download "${songLabel(song)}": ${errorText(error)}`);
       }
     }
@@ -167,10 +164,7 @@ export class DownloadService {
         const song = await this.deezer.getSongInfosFromWebsite(TYPE_TRACK, songId);
         files.push(await this.downloadSongToDisk(TYPE_PLAYLIST, song, playlistName));
       } catch (error) {
-        this.logger.warn(
-          { err: error, userId, songId },
-          'could not download favorite song; continuing',
-        );
+        this.logger.warn({ err: error, userId, songId }, 'could not download favorite song; continuing');
         onWarning?.(`Could not download song ${songId}: ${errorText(error)}`);
       }
     }
@@ -201,11 +195,7 @@ export class DownloadService {
     return [filename];
   }
 
-  public async downloadSongToDisk(
-    searchType: SongPathType,
-    song: DeezerSong,
-    playlistName?: string,
-  ): Promise<string> {
+  public async downloadSongToDisk(searchType: SongPathType, song: DeezerSong, playlistName?: string): Promise<string> {
     const directory = songDirectory(this.config.downloads, searchType, song, playlistName);
     await mkdir(directory, { recursive: true });
 
@@ -349,10 +339,7 @@ export class DownloadService {
         }
       }
     } catch (error) {
-      this.logger.error(
-        { err: error, host: this.config.mpd.host, port: this.config.mpd.port },
-        'could not update MPD',
-      );
+      this.logger.error({ err: error, host: this.config.mpd.host, port: this.config.mpd.port }, 'could not update MPD');
     } finally {
       client.close();
     }

@@ -156,10 +156,7 @@ describe('DownloadService', () => {
   });
 
   it('creates an m3u8 file for playlists', async () => {
-    const songs = [
-      makeSong({ SNG_ID: '1', SNG_TITLE: 'First' }),
-      makeSong({ SNG_ID: '2', SNG_TITLE: 'Second' }),
-    ];
+    const songs = [makeSong({ SNG_ID: '1', SNG_TITLE: 'First' }), makeSong({ SNG_ID: '2', SNG_TITLE: 'Second' })];
     const { service } = makeService({
       parseDeezerPlaylist: async () => ({ name: 'My Playlist', songs }),
     } as unknown as Partial<DeezerService>);
@@ -203,12 +200,8 @@ describe('DownloadService', () => {
     const files = await downloads.downloadFavorites('123', false, false);
 
     expect(files).toHaveLength(3);
-    expect(files[0]).toBe(
-      path.join(baseDirectory, 'playlists', 'favorites_123', 'Artist - Song 1.mp3'),
-    );
-    expect(files.at(-1)).toBe(
-      path.join(baseDirectory, 'playlists', 'favorites_123', '00 favorites_123.m3u8'),
-    );
+    expect(files[0]).toBe(path.join(baseDirectory, 'playlists', 'favorites_123', 'Artist - Song 1.mp3'));
+    expect(files.at(-1)).toBe(path.join(baseDirectory, 'playlists', 'favorites_123', '00 favorites_123.m3u8'));
   });
 
   it('fails clearly instead of creating empty playlists and zips', async () => {
@@ -217,9 +210,7 @@ describe('DownloadService', () => {
     } as unknown as Partial<DeezerService>);
     const downloads = new DownloadService(config, service, logger);
 
-    await expect(downloads.downloadPlaylist('playlist-url', false, false)).rejects.toBeInstanceOf(
-      DownloadError,
-    );
+    await expect(downloads.downloadPlaylist('playlist-url', false, false)).rejects.toBeInstanceOf(DownloadError);
     await expect(downloads.createM3u8File([])).rejects.toThrowError(/without songs/);
     await expect(downloads.createZipFile([])).rejects.toThrowError(/without songs/);
   });

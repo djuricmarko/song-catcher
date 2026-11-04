@@ -61,8 +61,7 @@ export function FilesPage() {
       <section>
         <h1 className="text-xl font-semibold text-zinc-900">Downloaded files</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Browse songs, album folders, playlists and zip archives. File links open the download
-          directly.
+          Browse songs, album folders, playlists and zip archives. File links open the download directly.
         </p>
       </section>
 
@@ -89,8 +88,7 @@ export function FilesPage() {
 
       {files.isError ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          Could not list files:{' '}
-          {files.error instanceof Error ? files.error.message : 'unknown error'}
+          Could not list files: {files.error instanceof Error ? files.error.message : 'unknown error'}
         </div>
       ) : null}
 
@@ -101,9 +99,7 @@ export function FilesPage() {
           <div className="px-4 py-12 text-center">
             <Folder className="mx-auto size-8 text-zinc-300" aria-hidden />
             <p className="mt-2 text-sm font-medium text-zinc-700">This folder is empty</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Downloads will appear here when they finish.
-            </p>
+            <p className="mt-1 text-sm text-zinc-500">Downloads will appear here when they finish.</p>
           </div>
         ) : (
           <ul className="divide-y divide-zinc-100">
@@ -118,9 +114,7 @@ export function FilesPage() {
                     }}
                   >
                     <Folder className="size-4 text-amber-600" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800">
-                      {entry.name}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800">{entry.name}</span>
                     <ChevronRight className="size-4 text-zinc-300" aria-hidden />
                   </button>
                 ) : (
@@ -129,9 +123,7 @@ export function FilesPage() {
                     className="flex items-center gap-3 px-4 py-3 transition hover:bg-zinc-50"
                   >
                     {fileIcon(entry.name)}
-                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-800">
-                      {entry.name}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-800">{entry.name}</span>
                     <span className="text-xs text-zinc-400">{formatSize(entry.size)}</span>
                   </a>
                 )}

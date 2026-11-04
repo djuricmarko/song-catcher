@@ -2,13 +2,7 @@
 import { Command } from 'commander';
 import pino from 'pino';
 
-import {
-  ConfigError,
-  checkEnvironment,
-  loadConfig,
-  redactConfig,
-  type AppConfig,
-} from './config/env.js';
+import { ConfigError, checkEnvironment, loadConfig, redactConfig, type AppConfig } from './config/env.js';
 import { DeezerClient } from './deezer/client.js';
 import { createLogger } from './logging.js';
 import { startServer } from './http/start.js';
@@ -59,9 +53,7 @@ async function run(options: CliOptions): Promise<void> {
         process.exitCode = 1;
       }
     } catch (error) {
-      console.error(
-        `Deezer login failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error(`Deezer login failed: ${error instanceof Error ? error.message : String(error)}`);
       process.exitCode = 1;
     }
     return;

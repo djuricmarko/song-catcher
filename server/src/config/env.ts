@@ -144,10 +144,7 @@ const rawSchema = z.object({
   DEEZER_HTTP_PORT: envInteger(5000, 1, 65535),
   DEEZER_URL_PREFIX: envText()
     .transform(normalizeUrlPrefix)
-    .refine(
-      (value) => value === '' || /^\/[A-Za-z0-9._~/-]+$/.test(value),
-      'must be a path such as /deezer',
-    )
+    .refine((value) => value === '' || /^\/[A-Za-z0-9._~/-]+$/.test(value), 'must be a path such as /deezer')
     .refine((value) => !value.includes('..'), 'must not contain ".."'),
   DEEZER_AUTH_USER: optionalEnvText,
   DEEZER_AUTH_PASSWORD: z
@@ -156,10 +153,7 @@ const rawSchema = z.object({
     .transform((value) => (value ? value : undefined)),
   DEEZER_WORKERS: envInteger(4, 1, 32),
   DEEZER_TASK_HISTORY: envInteger(500, 10, 10000),
-  DEEZER_DOWNLOAD_DIR: envText(DEFAULT_DOWNLOAD_DIR).refine(
-    (value) => value.length > 0,
-    'must not be empty',
-  ),
+  DEEZER_DOWNLOAD_DIR: envText(DEFAULT_DOWNLOAD_DIR).refine((value) => value.length > 0, 'must not be empty'),
   DEEZER_SONGS_DIR: optionalEnvText,
   DEEZER_ALBUMS_DIR: optionalEnvText,
   DEEZER_PLAYLISTS_DIR: optionalEnvText,
@@ -171,10 +165,7 @@ const rawSchema = z.object({
   DEEZER_MPD_MUSIC_DIR_ROOT: optionalEnvText,
   DEEZER_YTDLP_PATH: envText('yt-dlp').refine((value) => value.length > 0, 'must not be empty'),
   DEEZER_FFMPEG_PATH: envText('ffmpeg').refine((value) => value.length > 0, 'must not be empty'),
-  DEEZER_METAFLAC_PATH: envText('metaflac').refine(
-    (value) => value.length > 0,
-    'must not be empty',
-  ),
+  DEEZER_METAFLAC_PATH: envText('metaflac').refine((value) => value.length > 0, 'must not be empty'),
   DEEZER_LOG_LEVEL: envLogLevel,
   DEEZER_LOG_FILE: optionalEnvText,
   DEEZER_DEBUG_COMMAND: optionalEnvText,
@@ -196,10 +187,7 @@ export function resolvePath(input: string, cwd: string): string {
 
 export function isPathInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
-  return (
-    relative === '' ||
-    (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
-  );
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 function formatZodIssues(env: NodeJS.ProcessEnv, issues: z.core.$ZodIssue[]): string[] {
@@ -217,10 +205,7 @@ function formatZodIssues(env: NodeJS.ProcessEnv, issues: z.core.$ZodIssue[]): st
  * Pure configuration loader. It validates and normalizes environment variables
  * but does not touch the filesystem.
  */
-export function loadConfig(
-  env: NodeJS.ProcessEnv = process.env,
-  options: LoadConfigOptions = {},
-): AppConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadConfigOptions = {}): AppConfig {
   const cwd = options.cwd ?? process.cwd();
   const parsed = rawSchema.safeParse(env);
   if (!parsed.success) {
@@ -231,26 +216,16 @@ export function loadConfig(
   const baseDir = resolvePath(raw.DEEZER_DOWNLOAD_DIR, cwd);
   const downloads = {
     baseDir,
-    songsDir: raw.DEEZER_SONGS_DIR
-      ? resolvePath(raw.DEEZER_SONGS_DIR, cwd)
-      : path.join(baseDir, 'songs'),
-    albumsDir: raw.DEEZER_ALBUMS_DIR
-      ? resolvePath(raw.DEEZER_ALBUMS_DIR, cwd)
-      : path.join(baseDir, 'albums'),
+    songsDir: raw.DEEZER_SONGS_DIR ? resolvePath(raw.DEEZER_SONGS_DIR, cwd) : path.join(baseDir, 'songs'),
+    albumsDir: raw.DEEZER_ALBUMS_DIR ? resolvePath(raw.DEEZER_ALBUMS_DIR, cwd) : path.join(baseDir, 'albums'),
     playlistsDir: raw.DEEZER_PLAYLISTS_DIR
       ? resolvePath(raw.DEEZER_PLAYLISTS_DIR, cwd)
       : path.join(baseDir, 'playlists'),
-    zipsDir: raw.DEEZER_ZIPS_DIR
-      ? resolvePath(raw.DEEZER_ZIPS_DIR, cwd)
-      : path.join(baseDir, 'zips'),
-    youtubeDir: raw.DEEZER_YOUTUBE_DIR
-      ? resolvePath(raw.DEEZER_YOUTUBE_DIR, cwd)
-      : path.join(baseDir, 'youtube-dl'),
+    zipsDir: raw.DEEZER_ZIPS_DIR ? resolvePath(raw.DEEZER_ZIPS_DIR, cwd) : path.join(baseDir, 'zips'),
+    youtubeDir: raw.DEEZER_YOUTUBE_DIR ? resolvePath(raw.DEEZER_YOUTUBE_DIR, cwd) : path.join(baseDir, 'youtube-dl'),
   };
 
-  const musicDirRoot = raw.DEEZER_MPD_MUSIC_DIR_ROOT
-    ? resolvePath(raw.DEEZER_MPD_MUSIC_DIR_ROOT, cwd)
-    : undefined;
+  const musicDirRoot = raw.DEEZER_MPD_MUSIC_DIR_ROOT ? resolvePath(raw.DEEZER_MPD_MUSIC_DIR_ROOT, cwd) : undefined;
 
   const issues: string[] = [];
   if (Boolean(raw.DEEZER_AUTH_USER) !== Boolean(raw.DEEZER_AUTH_PASSWORD)) {
@@ -265,9 +240,7 @@ export function loadConfig(
     } else {
       for (const directory of Object.values(downloads)) {
         if (!isPathInside(musicDirRoot, directory)) {
-          issues.push(
-            `${directory} must be inside DEEZER_MPD_MUSIC_DIR_ROOT (${musicDirRoot}) when MPD is enabled`,
-          );
+          issues.push(`${directory} must be inside DEEZER_MPD_MUSIC_DIR_ROOT (${musicDirRoot}) when MPD is enabled`);
         }
       }
     }
@@ -334,10 +307,7 @@ export function isLoopbackHost(host: string): boolean {
   return host === 'localhost' || host === '::1' || /^127\./.test(host);
 }
 
-export function resolveExecutable(
-  command: string,
-  envPath: string = process.env.PATH ?? '',
-): string | undefined {
+export function resolveExecutable(command: string, envPath: string = process.env.PATH ?? ''): string | undefined {
   const trimmed = command.trim();
   if (!trimmed) {
     return undefined;
@@ -378,13 +348,7 @@ export async function checkEnvironment(config: AppConfig): Promise<EnvironmentRe
   // YouTube downloads, so they should not stop the server from starting.
   const toolVariables: Array<[ToolName, string, string, boolean, string]> = [
     ['ytDlp', 'DEEZER_YTDLP_PATH', config.tools.ytdlpPath, false, 'YouTube downloads will fail'],
-    [
-      'ffmpeg',
-      'DEEZER_FFMPEG_PATH',
-      config.tools.ffmpegPath,
-      false,
-      'YouTube audio extraction will fail',
-    ],
+    ['ffmpeg', 'DEEZER_FFMPEG_PATH', config.tools.ffmpegPath, false, 'YouTube audio extraction will fail'],
     [
       'metaflac',
       'DEEZER_METAFLAC_PATH',

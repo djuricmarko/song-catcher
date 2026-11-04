@@ -88,10 +88,7 @@ export class DeezerApiException extends Error {
 }
 
 function isSessionError(error: unknown): boolean {
-  return (
-    error instanceof Deezer403Exception ||
-    (error instanceof DeezerApiException && error.sessionRelated)
-  );
+  return error instanceof Deezer403Exception || (error instanceof DeezerApiException && error.sessionRelated);
 }
 
 const SHORT_LINK_HOSTS = new Set(['link.deezer.com', 'deezer.page.link']);
@@ -273,19 +270,16 @@ export class DeezerClient {
     try {
       body = await this.http.get(USER_DATA_URL).json<UserDataResponse>();
     } catch (error) {
-      throw new DeezerApiException(
-        `Could not retrieve the Deezer license token: ${errorMessage(error)}`,
-        { cause: error },
-      );
+      throw new DeezerApiException(`Could not retrieve the Deezer license token: ${errorMessage(error)}`, {
+        cause: error,
+      });
     }
 
     const options = body.results?.USER?.OPTIONS;
     const licenseToken = options?.license_token;
     const webSoundQuality = options?.web_sound_quality;
     if (!licenseToken || !webSoundQuality) {
-      throw new DeezerApiException(
-        'Could not retrieve the Deezer license token. Is DEEZER_COOKIE_ARL still valid?',
-      );
+      throw new DeezerApiException('Could not retrieve the Deezer license token. Is DEEZER_COOKIE_ARL still valid?');
     }
 
     return { licenseToken, webSoundQuality, webHq: options.web_hq === true };
@@ -350,10 +344,7 @@ export class DeezerClient {
     }
   }
 
-  public async getSongInfosFromWebsite(
-    searchType: typeof TYPE_TRACK,
-    id: string | number,
-  ): Promise<DeezerSong>;
+  public async getSongInfosFromWebsite(searchType: typeof TYPE_TRACK, id: string | number): Promise<DeezerSong>;
   public async getSongInfosFromWebsite(
     searchType: typeof TYPE_ALBUM | 'playlist',
     id: string | number,
@@ -389,10 +380,7 @@ export class DeezerClient {
             song.PHYSICAL_RELEASE_DATE = albumState.DATA.PHYSICAL_RELEASE_DATE;
           }
         } catch (error) {
-          this.logger.warn(
-            { err: error, songId: song.SNG_ID },
-            'Could not retrieve the album artist for a track',
-          );
+          this.logger.warn({ err: error, songId: song.SNG_ID }, 'Could not retrieve the album artist for a track');
         }
       }
       return searchType === TYPE_TRACK ? song : [song];
@@ -407,10 +395,7 @@ export class DeezerClient {
     return this.withSessionRetry(() => this.fetchWebsiteStateOnce(searchType, id));
   }
 
-  private async fetchWebsiteStateOnce(
-    searchType: WebsiteType,
-    id: string | number,
-  ): Promise<DeezerAppState> {
+  private async fetchWebsiteStateOnce(searchType: WebsiteType, id: string | number): Promise<DeezerAppState> {
     const url = `https://www.deezer.com/us/${searchType}/${id}`;
     let response: { statusCode: number; body: string };
     try {
@@ -431,9 +416,7 @@ export class DeezerClient {
       throw new DeezerApiException(`Got HTTP ${response.statusCode} for ${url} from Deezer`);
     }
     if (!response.body.includes('MD5_ORIGIN')) {
-      throw new Deezer403Exception(
-        'We are not logged in on deezer.com. Please update DEEZER_COOKIE_ARL.',
-      );
+      throw new Deezer403Exception('We are not logged in on deezer.com. Please update DEEZER_COOKIE_ARL.');
     }
 
     const state = extractAppState(response.body);
@@ -445,14 +428,7 @@ export class DeezerClient {
 
   public async deezerSearch(search: string, searchType: SearchType): Promise<SearchResult[]> {
     if (
-      ![
-        TYPE_TRACK,
-        TYPE_ALBUM,
-        TYPE_ARTIST,
-        TYPE_ALBUM_TRACK,
-        TYPE_ARTIST_ALBUM,
-        TYPE_ARTIST_TOP,
-      ].includes(searchType)
+      ![TYPE_TRACK, TYPE_ALBUM, TYPE_ARTIST, TYPE_ALBUM_TRACK, TYPE_ARTIST_ALBUM, TYPE_ARTIST_TOP].includes(searchType)
     ) {
       throw new DeezerApiException(`Unsupported search type: ${searchType}`);
     }
@@ -502,10 +478,9 @@ export class DeezerClient {
         });
         value = response.url;
       } catch (error) {
-        throw new DeezerApiException(
-          `Could not resolve short link '${playlistIdOrUrl}': ${errorMessage(error)}`,
-          { cause: error },
-        );
+        throw new DeezerApiException(`Could not resolve short link '${playlistIdOrUrl}': ${errorMessage(error)}`, {
+          cause: error,
+        });
       }
     }
 
@@ -532,10 +507,9 @@ export class DeezerClient {
         })
         .json<PlaylistResponse>();
     } catch (error) {
-      throw new DeezerApiException(
-        `Could not load Deezer playlist ${playlistId}: ${errorMessage(error)}`,
-        { cause: error },
-      );
+      throw new DeezerApiException(`Could not load Deezer playlist ${playlistId}: ${errorMessage(error)}`, {
+        cause: error,
+      });
     }
 
     if (body.error && body.error.length > 0) {
@@ -572,12 +546,9 @@ export class DeezerClient {
       if (error instanceof DeezerApiException) {
         throw error;
       }
-      throw new DeezerApiException(
-        `Could not retrieve a Deezer CSRF token: ${errorMessage(error)}`,
-        {
-          cause: error,
-        },
-      );
+      throw new DeezerApiException(`Could not retrieve a Deezer CSRF token: ${errorMessage(error)}`, {
+        cause: error,
+      });
     }
   }
 
@@ -595,15 +566,12 @@ export class DeezerClient {
       try {
         body = await this.http.get(url).json<FavoritesResponse>();
       } catch (error) {
-        throw new DeezerApiException(
-          `Could not retrieve favorite songs for user ${userId}: ${errorMessage(error)}`,
-          { cause: error },
-        );
+        throw new DeezerApiException(`Could not retrieve favorite songs for user ${userId}: ${errorMessage(error)}`, {
+          cause: error,
+        });
       }
       if (body.error) {
-        throw new DeezerApiException(
-          `Upstream API error for user ${userId}: ${apiErrorText(body.error)}`,
-        );
+        throw new DeezerApiException(`Upstream API error for user ${userId}: ${apiErrorText(body.error)}`);
       }
 
       for (const song of body.data ?? []) {
@@ -647,17 +615,14 @@ export class DeezerClient {
 
     const body = response.body as GetUrlResponse;
     if (response.statusCode >= 400) {
-      throw new DeezerApiException(
-        `Could not retrieve song URL: HTTP ${response.statusCode} ${JSON.stringify(body)}`,
-        { sessionRelated: response.statusCode === 401 || response.statusCode === 403 },
-      );
+      throw new DeezerApiException(`Could not retrieve song URL: HTTP ${response.statusCode} ${JSON.stringify(body)}`, {
+        sessionRelated: response.statusCode === 401 || response.statusCode === 403,
+      });
     }
 
     const entry = body.data?.[0];
     if (!entry) {
-      throw new DeezerApiException(
-        `Could not get download URL from API. API response: ${JSON.stringify(body)}`,
-      );
+      throw new DeezerApiException(`Could not get download URL from API. API response: ${JSON.stringify(body)}`);
     }
     if (entry.errors && entry.errors.length > 0) {
       const message = entry.errors[0]?.message ?? 'unknown error';
@@ -698,21 +663,14 @@ export class DeezerClient {
       if (!resolvedSong.FALLBACK) {
         throw error;
       }
-      this.logger.warn(
-        { songId: resolvedSong.SNG_ID, err: error },
-        'primary song unavailable, trying fallback',
-      );
+      this.logger.warn({ songId: resolvedSong.SNG_ID, err: error }, 'primary song unavailable, trying fallback');
       resolvedSong = resolvedSong.FALLBACK;
       source = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
     }
 
     const key = calcBfKey(resolvedSong.SNG_ID);
     try {
-      await pipeline(
-        this.http.stream(source.url),
-        createDecryptTransform(key),
-        createWriteStream(outputFile),
-      );
+      await pipeline(this.http.stream(source.url), createDecryptTransform(key), createWriteStream(outputFile));
     } catch (error) {
       await rm(outputFile, { force: true }).catch(() => undefined);
       throw new DeezerApiException(
@@ -730,10 +688,7 @@ export class DeezerClient {
         metaflacPath: this.config.tools.metaflacPath,
       });
     } catch (error) {
-      this.logger.warn(
-        { err: error, file: outputFile, songId: resolvedSong.SNG_ID },
-        'could not write song metadata',
-      );
+      this.logger.warn({ err: error, file: outputFile, songId: resolvedSong.SNG_ID }, 'could not write song metadata');
     }
 
     if (source.format !== this.currentSoundFormat) {
@@ -742,10 +697,7 @@ export class DeezerClient {
         'song is not available in the preferred format; downloaded a lower quality',
       );
     }
-    this.logger.info(
-      { file: outputFile, songId: resolvedSong.SNG_ID, format: source.format },
-      'download finished',
-    );
+    this.logger.info({ file: outputFile, songId: resolvedSong.SNG_ID, format: source.format }, 'download finished');
     return { format: source.format, extension: extensionForFormat(source.format) };
   }
 
@@ -788,10 +740,7 @@ export class DeezerClient {
       const data = await this.http.get(url).buffer();
       return Buffer.from(data);
     } catch (error) {
-      throw new DeezerApiException(
-        `Could not download cover ${pictureId}: ${errorMessage(error)}`,
-        { cause: error },
-      );
+      throw new DeezerApiException(`Could not download cover ${pictureId}: ${errorMessage(error)}`, { cause: error });
     }
   }
 

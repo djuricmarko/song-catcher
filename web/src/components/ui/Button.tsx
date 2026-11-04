@@ -13,8 +13,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const VARIANTS: Record<ButtonVariant, string> = {
   default: 'bg-violet-600 text-white hover:bg-violet-700 focus-visible:outline-violet-600',
   secondary: 'bg-zinc-900 text-white hover:bg-zinc-800 focus-visible:outline-zinc-900',
-  outline:
-    'border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 focus-visible:outline-zinc-400',
+  outline: 'border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 focus-visible:outline-zinc-400',
   ghost: 'text-zinc-700 hover:bg-zinc-100 focus-visible:outline-zinc-300',
   destructive: 'bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600',
 };

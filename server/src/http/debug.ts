@@ -57,9 +57,7 @@ export async function getDebugOutput(config: AppConfig): Promise<string> {
     try {
       return await tailFile(config.logging.file);
     } catch (error) {
-      return `Could not read ${config.logging.file}: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      return `Could not read ${config.logging.file}: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 

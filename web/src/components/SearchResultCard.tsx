@@ -35,12 +35,7 @@ export function SearchResultCard({
   return (
     <div className="flex gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
       {result.img_url ? (
-        <img
-          src={result.img_url}
-          alt=""
-          className="size-20 shrink-0 rounded-lg object-cover"
-          loading="lazy"
-        />
+        <img src={result.img_url} alt="" className="size-20 shrink-0 rounded-lg object-cover" loading="lazy" />
       ) : (
         <div className="flex size-20 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-400">
           <ListMusic className="size-6" aria-hidden />
@@ -54,12 +49,7 @@ export function SearchResultCard({
         {isTrack && result.preview_url ? (
           <div className="mt-2 flex items-center gap-2">
             <Play className="size-3.5 shrink-0 text-zinc-400" aria-hidden />
-            <audio
-              controls
-              preload="none"
-              src={result.preview_url}
-              className="h-8 w-full max-w-sm"
-            />
+            <audio controls preload="none" src={result.preview_url} className="h-8 w-full max-w-sm" />
           </div>
         ) : null}
 

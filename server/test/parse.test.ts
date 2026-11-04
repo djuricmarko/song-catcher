@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  apiErrorText,
-  extractAppState,
-  extractPlaylistId,
-  mapSearchResult,
-} from '../src/deezer/parse.js';
+import { apiErrorText, extractAppState, extractPlaylistId, mapSearchResult } from '../src/deezer/parse.js';
 
 describe('extractAppState', () => {
   it('extracts the Deezer page state from an inline script', () => {
@@ -90,10 +85,7 @@ describe('mapSearchResult', () => {
 
   it('maps albums', () => {
     expect(
-      mapSearchResult(
-        { id: 3, title: 'Album', cover_small: 'cover', artist: { name: 'Artist' } },
-        'artist_album',
-      ),
+      mapSearchResult({ id: 3, title: 'Album', cover_small: 'cover', artist: { name: 'Artist' } }, 'artist_album'),
     ).toMatchObject({ id: '3', id_type: 'album', album: 'Album', artist: 'Artist' });
   });
 
@@ -126,9 +118,12 @@ describe('mapSearchResult', () => {
   });
 
   it('maps artists', () => {
-    expect(
-      mapSearchResult({ id: 2, name: 'Artist', picture_small: 'picture' }, 'artist'),
-    ).toMatchObject({ id: '2', id_type: 'artist', artist: 'Artist', img_url: 'picture' });
+    expect(mapSearchResult({ id: 2, name: 'Artist', picture_small: 'picture' }, 'artist')).toMatchObject({
+      id: '2',
+      id_type: 'artist',
+      artist: 'Artist',
+      img_url: 'picture',
+    });
   });
 });
 

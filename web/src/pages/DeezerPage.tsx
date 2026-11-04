@@ -64,8 +64,8 @@ export function DeezerPage() {
     <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <h1 className="text-xl font-semibold text-zinc-900">Deezer playlists and favorites</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Download a public Deezer playlist or the favorite songs of a Deezer user. Playlists get an
-        m3u8 file and can be packed into a zip archive.
+        Download a public Deezer playlist or the favorite songs of a Deezer user. Playlists get an m3u8 file and can be
+        packed into a zip archive.
       </p>
 
       <div className="mt-4 flex gap-1 rounded-lg bg-zinc-100 p-1">
