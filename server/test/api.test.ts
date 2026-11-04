@@ -149,6 +149,20 @@ describe('downloads static files', () => {
     expect(literal.body).toBe('literal');
   });
 
+  it('serves zip files with non-ASCII names as attachments', async () => {
+    await mkdir(path.join(baseDirectory, 'zips'), { recursive: true });
+    await writeFile(path.join(baseDirectory, 'zips', 'Ōkami - 大神.zip'), 'zip');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/downloads/zips/${encodeURIComponent('Ōkami - 大神.zip')}`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-disposition']).toBe(
+      `attachment; filename="_kami - __.zip"; filename*=UTF-8''${encodeURIComponent('Ōkami - 大神.zip')}`,
+    );
+  });
+
   it('still blocks encoded path traversal', async () => {
     const response = await app.inject({ method: 'GET', url: '/downloads/..%2F..%2Fetc%2Fpasswd' });
     expect(response.statusCode).not.toBe(200);

@@ -18,6 +18,19 @@ import { registerApiRoutes, type ApiServices } from './routes.js';
 
 const WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
 
+/**
+ * Builds an RFC 6266 attachment header. HTTP header values must be Latin-1,
+ * so non-ASCII names go in `filename*` (RFC 5987) with an ASCII fallback.
+ */
+export function contentDisposition(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
 export async function createServer(config: AppConfig, logger: Logger, services: ApiServices) {
   const app = Fastify({
     loggerInstance: logger,
@@ -113,10 +126,7 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
       },
       setHeaders: (response, filePath) => {
         if (filePath.endsWith('.zip')) {
-          response.header(
-            'Content-Disposition',
-            `attachment; filename="${path.basename(filePath)}"`,
-          );
+          response.header('Content-Disposition', contentDisposition(path.basename(filePath)));
         }
       },
     });
