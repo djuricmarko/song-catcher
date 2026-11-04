@@ -100,11 +100,12 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
       decorateReply: false,
       index: false,
       list: false,
+      // `pathname` is already URL-decoded by Fastify; decoding it again breaks
+      // filenames containing `%` (e.g. "100% Pure.mp3").
       allowedPath: (pathname, root) => {
         try {
-          const decoded = decodeURIComponent(pathname);
           const rootPath = String(root);
-          const resolved = path.resolve(rootPath, `.${decoded}`);
+          const resolved = path.resolve(rootPath, `.${pathname}`);
           return isPathInside(realpathSync(rootPath), realpathSync(resolved));
         } catch {
           return false;

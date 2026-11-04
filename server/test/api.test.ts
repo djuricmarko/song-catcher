@@ -128,6 +128,31 @@ describe('downloads static files', () => {
       await rm(outside, { recursive: true, force: true });
     }
   });
+
+  it('serves files whose names contain percent signs', async () => {
+    await writeFile(path.join(baseDirectory, 'songs', '100% Pure.mp3'), 'pure');
+    await writeFile(path.join(baseDirectory, 'songs', 'a%41.mp3'), 'literal');
+    await writeFile(path.join(baseDirectory, 'songs', 'aA.mp3'), 'decoded');
+
+    const percent = await app.inject({
+      method: 'GET',
+      url: `/downloads/songs/${encodeURIComponent('100% Pure.mp3')}`,
+    });
+    expect(percent.statusCode).toBe(200);
+    expect(percent.body).toBe('pure');
+
+    const literal = await app.inject({
+      method: 'GET',
+      url: `/downloads/songs/${encodeURIComponent('a%41.mp3')}`,
+    });
+    expect(literal.statusCode).toBe(200);
+    expect(literal.body).toBe('literal');
+  });
+
+  it('still blocks encoded path traversal', async () => {
+    const response = await app.inject({ method: 'GET', url: '/downloads/..%2F..%2Fetc%2Fpasswd' });
+    expect(response.statusCode).not.toBe(200);
+  });
 });
 
 describe('search', () => {
