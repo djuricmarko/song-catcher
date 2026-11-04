@@ -4,12 +4,12 @@ import { pipeline } from 'node:stream/promises';
 
 import got, { type Got } from 'got';
 import type { Logger } from 'pino';
-import { ProxyAgent } from 'proxy-agent';
 import { CookieJar } from 'tough-cookie';
 
 import type { AppConfig } from '../config/env.js';
 import { calcBfKey, createDecryptTransform } from './crypto.js';
 import { writeSongMetadata } from './metadata.js';
+import { createProxyAgent } from './proxy.js';
 import {
   apiErrorText,
   errorMessage,
@@ -197,8 +197,7 @@ export class DeezerClient {
       dnt: '1',
     };
 
-    const proxyUrl = config.deezer.proxyUrl.trim();
-    const proxyAgent = proxyUrl ? new ProxyAgent({ getProxyForUrl: () => proxyUrl }) : undefined;
+    const proxyAgent = createProxyAgent(config.deezer.proxyUrl);
 
     this.http = got.extend({
       cookieJar: this.jar,
