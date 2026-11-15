@@ -77,6 +77,7 @@ beforeEach(async () => {
   scheduler.register('download_deezer_playlist_and_queue_and_zip', async () => []);
   scheduler.register('download_deezer_favorites', async () => []);
   scheduler.register('download_youtubedl_and_queue', async () => []);
+  scheduler.register('download_youtube_playlist_and_queue_and_zip', async () => []);
   scheduler.start();
 
   app = await createServer(config, logger, {
@@ -247,6 +248,46 @@ describe('download endpoints', () => {
       payload: { url: 'ftp://example.com/file', add_to_playlist: false },
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('enqueues a YouTube playlist download', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/playlist/youtube',
+      payload: {
+        url: 'https://www.youtube.com/playlist?list=PL123',
+        add_to_playlist: false,
+        create_zip: true,
+      },
+    });
+    expect(response.statusCode).toBe(202);
+
+    const queue = await app.inject({ method: 'GET', url: '/api/queue' });
+    expect(queue.json().at(-1)).toMatchObject({
+      id: response.json().task_id,
+      description: 'Downloading YouTube playlist',
+      args: {
+        playlist_url: 'https://www.youtube.com/playlist?list=PL123',
+        add_to_playlist: false,
+        create_zip: true,
+      },
+    });
+  });
+
+  it('rejects an invalid YouTube playlist request', async () => {
+    const nonHttp = await app.inject({
+      method: 'POST',
+      url: '/api/playlist/youtube',
+      payload: { url: 'ftp://example.com/list', add_to_playlist: false, create_zip: false },
+    });
+    expect(nonHttp.statusCode).toBe(400);
+
+    const missingZip = await app.inject({
+      method: 'POST',
+      url: '/api/playlist/youtube',
+      payload: { url: 'https://www.youtube.com/playlist?list=PL123', add_to_playlist: false },
+    });
+    expect(missingZip.statusCode).toBe(400);
   });
 
   it('enqueues a playlist download', async () => {

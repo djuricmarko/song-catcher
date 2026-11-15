@@ -76,14 +76,24 @@ const downloadSchema = z
   })
   .strict();
 
+const httpUrl = z
+  .string()
+  .trim()
+  .url()
+  .refine((value) => value.startsWith('http'), 'must start with http');
+
 const youtubeSchema = z
   .object({
-    url: z
-      .string()
-      .trim()
-      .url()
-      .refine((value) => value.startsWith('http'), 'must start with http'),
+    url: httpUrl,
     add_to_playlist: z.boolean(),
+  })
+  .strict();
+
+const youtubePlaylistSchema = z
+  .object({
+    url: httpUrl,
+    add_to_playlist: z.boolean(),
+    create_zip: z.boolean(),
   })
   .strict();
 
@@ -178,6 +188,25 @@ export async function registerApiRoutes(
         'download_deezer_playlist_and_queue_and_zip',
         {
           playlist_id: body.playlist_url,
+          add_to_playlist: body.add_to_playlist,
+          create_zip: body.create_zip,
+        },
+      );
+      const response: TaskAcceptedResponse = { task_id: task.id };
+      return reply.code(202).send(response);
+    } catch (error) {
+      return handleApiError(reply, error, request.log);
+    }
+  });
+
+  app.post(`${api}/playlist/youtube`, async (request, reply) => {
+    try {
+      const body = parseBody(youtubePlaylistSchema, request.body);
+      const task = services.scheduler.enqueue(
+        'Downloading YouTube playlist',
+        'download_youtube_playlist_and_queue_and_zip',
+        {
+          playlist_url: body.url,
           add_to_playlist: body.add_to_playlist,
           create_zip: body.create_zip,
         },

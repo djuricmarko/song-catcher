@@ -35,6 +35,15 @@ describe('listFiles', () => {
     expect(album.entries[0]).toMatchObject({ name: '..', path: '', isDirectory: true });
   });
 
+  it('hides dotfiles such as the playlist manifest', async () => {
+    const base = await makeBase();
+    await writeFile(path.join(base, '.playlist.json'), '{}');
+    await writeFile(path.join(base, 'song.mp3'), 'abc');
+
+    const root = await listFiles(base, '');
+    expect(root.entries.map((entry) => entry.name)).toEqual(['song.mp3']);
+  });
+
   it('rejects traversal outside the base directory', async () => {
     const base = await makeBase();
     await expect(listFiles(base, '../')).rejects.toBeInstanceOf(FileAccessError);
