@@ -48,6 +48,7 @@ describe('loadConfig defaults', () => {
       youtubeDir: '/tmp/deezer-downloader/youtube-dl',
     });
     expect(config.queue).toEqual({ workers: 4, historyLimit: 500 });
+    expect(config.youtube).toEqual({ playlistMaxEntries: 500 });
     expect(config.mpd).toEqual({
       enabled: false,
       host: 'localhost',
@@ -72,6 +73,7 @@ describe('loadConfig defaults', () => {
       DEEZER_URL_PREFIX: 'deezer/',
       DEEZER_WORKERS: '8',
       DEEZER_TASK_HISTORY: '100',
+      DEEZER_YOUTUBE_PLAYLIST_MAX: '50',
       DEEZER_LOG_LEVEL: ' DEBUG ',
       NODE_ENV: 'production',
     });
@@ -80,6 +82,7 @@ describe('loadConfig defaults', () => {
     expect(config.deezer.proxyUrl).toBe('socks5h://127.0.0.1:9050');
     expect(config.http).toEqual({ host: '0.0.0.0', port: 8080, urlPrefix: '/deezer' });
     expect(config.queue).toEqual({ workers: 8, historyLimit: 100 });
+    expect(config.youtube).toEqual({ playlistMaxEntries: 50 });
     expect(config.logging.level).toBe('debug');
     expect(config.isProduction).toBe(true);
   });
@@ -155,6 +158,10 @@ describe('loadConfig validation', () => {
 
   it.each(['0', '33', '2.5'])('rejects an invalid worker count: %s', (workers) => {
     expect(() => load({ DEEZER_WORKERS: workers })).toThrowError(/DEEZER_WORKERS/);
+  });
+
+  it.each(['0', '10001', 'many'])('rejects an invalid YouTube playlist limit: %s', (limit) => {
+    expect(() => load({ DEEZER_YOUTUBE_PLAYLIST_MAX: limit })).toThrowError(/DEEZER_YOUTUBE_PLAYLIST_MAX/);
   });
 
   it('rejects unsupported proxy schemes', () => {

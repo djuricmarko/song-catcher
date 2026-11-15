@@ -69,6 +69,16 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
     return downloads.downloadYoutube(args.video_url, args.add_to_playlist);
   });
 
+  scheduler.register('download_youtube_playlist_and_queue_and_zip', async (args, context) => {
+    return downloads.downloadYoutubePlaylist(
+      args.playlist_url,
+      args.add_to_playlist,
+      args.create_zip,
+      context.reportProgress,
+      context.reportWarning,
+    );
+  });
+
   scheduler.start();
 
   const app = await createServer(config, logger, { deezer, scheduler, downloads });

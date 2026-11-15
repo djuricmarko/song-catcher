@@ -2,7 +2,7 @@ import { ArrowRight, Link2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
-import { startYoutubeDownload } from '../../api/client';
+import { startYoutubeDownload, startYoutubePlaylistDownload } from '../../api/client';
 import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
@@ -11,6 +11,7 @@ import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
 import { dismissKeyboard } from '../../lib/dismissKeyboard';
+import { playlistLinkKind } from '../../lib/playlistUrl';
 
 import styles from './YoutubePage.module.css';
 
@@ -21,7 +22,21 @@ export function YoutubePage() {
   const mpdEnabled = appConfig.data?.useMpd ?? false;
   const [url, setUrl] = useState('');
   const [addToPlaylist, setAddToPlaylist] = useState(false);
+  const [createZip, setCreateZip] = useState(false);
+  // Only meaningful for a video opened from a playlist; a playlist page is always downloaded whole.
+  const [entirePlaylist, setEntirePlaylist] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const linkKind = playlistLinkKind(url);
+  const playlistMode = linkKind === 'playlist' || (linkKind === 'video' && entirePlaylist);
+
+  function changeUrl(next: string) {
+    // The choice belongs to one link; a different playlist starts from the default again.
+    if (playlistLinkKind(next) !== 'video') {
+      setEntirePlaylist(false);
+    }
+    setUrl(next);
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,9 +49,13 @@ export function YoutubePage() {
     dismissKeyboard();
     setBusy(true);
     try {
-      const task = await startYoutubeDownload(trimmed, addToPlaylist);
-      toast.success('Download queued', { description: `Task #${task.task_id}` });
-      setUrl('');
+      const task = playlistMode
+        ? await startYoutubePlaylistDownload(trimmed, addToPlaylist, createZip)
+        : await startYoutubeDownload(trimmed, addToPlaylist);
+      toast.success(playlistMode ? 'Playlist queued' : 'Download queued', {
+        description: `Task #${task.task_id}`,
+      });
+      changeUrl('');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -54,7 +73,7 @@ export function YoutubePage() {
             Rip the audio <em>from anywhere</em>
           </>
         }
-        description="Paste any link yt-dlp understands. The audio track is extracted, converted to MP3 and tagged."
+        description="Paste any link yt-dlp understands. The audio track is extracted, converted to MP3 and tagged. A YouTube playlist link downloads every song in it."
       />
 
       <Panel as="form" onSubmit={onSubmit} className={styles.panel}>
@@ -63,10 +82,10 @@ export function YoutubePage() {
             size="lg"
             value={url}
             onChange={(event) => {
-              setUrl(event.target.value);
+              changeUrl(event.target.value);
             }}
             leading={<Link2 size={18} aria-hidden />}
-            trailing={url ? undefined : <PasteButton onPaste={setUrl} label="Paste link" />}
+            trailing={url ? undefined : <PasteButton onPaste={changeUrl} label="Paste link" />}
             placeholder="https://www.youtube.com/watch?v=…"
             aria-label="Video URL"
             inputMode="url"
@@ -77,12 +96,32 @@ export function YoutubePage() {
             spellCheck={false}
           />
           <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
-            {busy ? 'Queueing…' : 'Extract'}
+            {busy ? 'Queueing…' : playlistMode ? 'Extract playlist' : 'Extract'}
             <ArrowRight size={16} aria-hidden />
           </Button>
         </div>
-        {mpdEnabled ? (
-          <Checkbox checked={addToPlaylist} onCheckedChange={setAddToPlaylist} label="Add to MPD playlist" />
+        {mpdEnabled || linkKind !== 'none' ? (
+          <div className={styles.options}>
+            {linkKind === 'video' ? (
+              <Checkbox
+                checked={entirePlaylist}
+                onCheckedChange={setEntirePlaylist}
+                label="Download the entire playlist"
+                hint="This video is part of a playlist"
+              />
+            ) : null}
+            {playlistMode ? (
+              <Checkbox
+                checked={createZip}
+                onCheckedChange={setCreateZip}
+                label="Pack into a zip"
+                hint="One archive with every song and the m3u8"
+              />
+            ) : null}
+            {mpdEnabled ? (
+              <Checkbox checked={addToPlaylist} onCheckedChange={setAddToPlaylist} label="Add to MPD playlist" />
+            ) : null}
+          </div>
         ) : null}
       </Panel>
 

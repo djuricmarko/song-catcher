@@ -80,6 +80,18 @@ export function startYoutubeDownload(url: string, addToPlaylist: boolean): Promi
   });
 }
 
+export function startYoutubePlaylistDownload(
+  url: string,
+  addToPlaylist: boolean,
+  createZip: boolean,
+): Promise<TaskAcceptedResponse> {
+  return post<TaskAcceptedResponse>('/playlist/youtube', {
+    url,
+    add_to_playlist: addToPlaylist,
+    create_zip: createZip,
+  });
+}
+
 export function startPlaylistDownload(
   playlistUrl: string,
   addToPlaylist: boolean,

@@ -61,6 +61,10 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
 
   const directoryEntries = await readdir(target, { withFileTypes: true });
   for (const entry of directoryEntries) {
+    // Dotfiles are bookkeeping (e.g. the YouTube playlist manifest), not music.
+    if (entry.name.startsWith('.')) {
+      continue;
+    }
     const absolute = path.join(target, entry.name);
     let size = 0;
     let isDirectory = entry.isDirectory();

@@ -32,6 +32,10 @@ export interface AppConfig {
     workers: number;
     historyLimit: number;
   };
+  youtube: {
+    /** Upper bound of songs taken from one playlist. */
+    playlistMaxEntries: number;
+  };
   mpd: {
     enabled: boolean;
     host: string;
@@ -159,6 +163,7 @@ const rawSchema = z.object({
   DEEZER_PLAYLISTS_DIR: optionalEnvText,
   DEEZER_ZIPS_DIR: optionalEnvText,
   DEEZER_YOUTUBE_DIR: optionalEnvText,
+  DEEZER_YOUTUBE_PLAYLIST_MAX: envInteger(500, 1, 10000),
   DEEZER_MPD_ENABLED: envBoolean,
   DEEZER_MPD_HOST: envText('localhost').refine((value) => value.length > 0, 'must not be empty'),
   DEEZER_MPD_PORT: envInteger(6600, 1, 65535),
@@ -268,6 +273,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
     queue: Object.freeze({
       workers: raw.DEEZER_WORKERS,
       historyLimit: raw.DEEZER_TASK_HISTORY,
+    }),
+    youtube: Object.freeze({
+      playlistMaxEntries: raw.DEEZER_YOUTUBE_PLAYLIST_MAX,
     }),
     mpd: Object.freeze({
       enabled: raw.DEEZER_MPD_ENABLED,

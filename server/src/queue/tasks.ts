@@ -19,6 +19,11 @@ export type DownloadTasks = {
   };
   download_deezer_favorites: { user_id: string; add_to_playlist: boolean; create_zip: boolean };
   download_youtubedl_and_queue: { video_url: string; add_to_playlist: boolean };
+  download_youtube_playlist_and_queue_and_zip: {
+    playlist_url: string;
+    add_to_playlist: boolean;
+    create_zip: boolean;
+  };
 };
 
 export type DownloadScheduler = Scheduler<DownloadTasks>;

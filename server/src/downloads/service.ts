@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import archiver from 'archiver';
@@ -10,8 +10,8 @@ import type { AppConfig } from '../config/env.js';
 import type { DeezerClient } from '../deezer/client.js';
 import { TYPE_ALBUM, TYPE_PLAYLIST, TYPE_TRACK, type DeezerSong } from '../deezer/types.js';
 import { MpdClient } from '../mpd/client.js';
-import { buildSongFilename, mpdRelativePath, songDirectory, type SongPathType } from './paths.js';
-import { downloadWithYtDlp } from './youtube.js';
+import { buildSongFilename, cleanFilename, mpdRelativePath, songDirectory, type SongPathType } from './paths.js';
+import { downloadWithYtDlp, listYtDlpPlaylist } from './youtube.js';
 
 export type DeezerService = Pick<
   DeezerClient,
@@ -40,6 +40,47 @@ export class DownloadError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'DownloadError';
+  }
+}
+
+/**
+ * Remembers which playlist entry produced which file, so downloading the
+ * same playlist again only fetches new songs. yt-dlp names files after the
+ * video title, which is not known before downloading.
+ */
+export const YOUTUBE_PLAYLIST_MANIFEST = '.playlist.json';
+
+type PlaylistManifest = Record<string, string>;
+
+async function readPlaylistManifest(directory: string): Promise<PlaylistManifest> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(path.join(directory, YOUTUBE_PLAYLIST_MANIFEST), 'utf8'));
+  } catch {
+    // Missing or damaged: every song is downloaded again and the file rewritten.
+    return {};
+  }
+  const manifest: PlaylistManifest = {};
+  if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    for (const [id, filename] of Object.entries(parsed)) {
+      // Only plain file names, so a tampered manifest cannot point outside the directory.
+      if (typeof filename === 'string' && filename !== '' && path.basename(filename) === filename) {
+        manifest[id] = filename;
+      }
+    }
+  }
+  return manifest;
+}
+
+async function writePlaylistManifest(directory: string, manifest: PlaylistManifest): Promise<void> {
+  const target = path.join(directory, YOUTUBE_PLAYLIST_MANIFEST);
+  const temporary = `${target}.${randomUUID()}.part`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await rename(temporary, target);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
   }
 }
 
@@ -193,6 +234,84 @@ export class DownloadService {
     });
     await this.updateMpd([filename], addToPlaylist);
     return [filename];
+  }
+
+  public async downloadYoutubePlaylist(
+    url: string,
+    addToPlaylist: boolean,
+    createZip: boolean,
+    onProgress?: ProgressReporter,
+    onWarning?: WarningReporter,
+  ): Promise<string[]> {
+    const maxEntries = this.config.youtube.playlistMaxEntries;
+    const playlist = await listYtDlpPlaylist({
+      url,
+      executable: this.config.tools.ytdlpPath,
+      proxyUrl: this.config.deezer.proxyUrl,
+      maxEntries,
+    });
+    if (playlist.entries.length === 0) {
+      throw new DownloadError(`Playlist '${playlist.title}' has no songs`);
+    }
+    if (playlist.truncated) {
+      onWarning?.(
+        `Playlist '${playlist.title}' has more than ${maxEntries} songs; only the first ${maxEntries} are downloaded`,
+      );
+    }
+
+    const directory = path.join(this.config.downloads.youtubeDir, cleanFilename(playlist.title));
+    await mkdir(directory, { recursive: true });
+    const manifest = await readPlaylistManifest(directory);
+
+    // A Set, because two videos with the same title end up in the same file.
+    const files = new Set<string>();
+    for (const [index, entry] of playlist.entries.entries()) {
+      onProgress?.(index, playlist.entries.length);
+
+      const known = manifest[entry.id];
+      if (known && (await fileExists(path.join(directory, known)))) {
+        this.logger.info({ file: path.join(directory, known) }, 'skipping existing song');
+        files.add(path.join(directory, known));
+        continue;
+      }
+
+      try {
+        const filename = await downloadWithYtDlp({
+          url: entry.url,
+          destinationDirectory: directory,
+          executable: this.config.tools.ytdlpPath,
+          ffmpegPath: this.config.tools.ffmpegPath,
+          proxyUrl: this.config.deezer.proxyUrl,
+        });
+        files.add(filename);
+        if (path.dirname(filename) === directory) {
+          manifest[entry.id] = path.basename(filename);
+          await writePlaylistManifest(directory, manifest).catch((error: unknown) => {
+            this.logger.warn({ err: error, directory }, 'could not save the playlist manifest');
+          });
+        }
+      } catch (error) {
+        this.logger.warn(
+          { err: error, playlist: playlist.title, url: entry.url },
+          'could not download playlist song; continuing',
+        );
+        onWarning?.(`Could not download "${entry.title}": ${errorText(error)}`);
+      }
+    }
+    onProgress?.(playlist.entries.length, playlist.entries.length);
+
+    if (files.size === 0) {
+      throw new DownloadError(`No songs from playlist '${playlist.title}' could be downloaded`);
+    }
+
+    const downloaded = [...files];
+    await this.updateMpd(downloaded, addToPlaylist);
+    const m3u8File = await this.createM3u8File(downloaded);
+    const filesWithPlaylist = [...downloaded, m3u8File];
+    if (createZip) {
+      return [await this.createZipFile(filesWithPlaylist)];
+    }
+    return filesWithPlaylist;
   }
 
   public async downloadSongToDisk(searchType: SongPathType, song: DeezerSong, playlistName?: string): Promise<string> {

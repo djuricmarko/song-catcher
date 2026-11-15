@@ -13,7 +13,8 @@ It will be removed in 4.0.0.
 - Download tracks, albums, Deezer playlists and your Deezer favourites.
 - Optional FLAC downloads for lossless accounts; otherwise the app falls back to MP3.
 - MP3 ID3 tags and embedded cover art; FLAC tags and embedded cover art via `metaflac`.
-- Download audio from YouTube with `yt-dlp`.
+- Download audio from YouTube with `yt-dlp`, one video or a whole playlist. Songs of a playlist that
+  are already on disk are skipped when you download it again.
 - Optional ZIP archives containing an `.m3u8` playlist.
 - Optional MPD integration: update the library and add downloads to the current playlist.
 - Live queue updates over Server-Sent Events (SSE).
@@ -94,34 +95,35 @@ Every setting is an environment variable. `.env.example` contains a documented s
 local development, Node's native `--env-file` support loads `.env`; in production, use your process
 manager, Docker, or systemd to set real environment variables.
 
-| Variable                    | Default                  | Description                                                                             |
-| --------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
-| `DEEZER_COOKIE_ARL`         | **required**             | Deezer ARL cookie.                                                                      |
-| `DEEZER_QUALITY`            | `mp3`                    | `mp3` or `flac`. FLAC requires a lossless account; otherwise the app falls back to MP3. |
-| `DEEZER_PROXY_URL`          | empty                    | Optional `https://`, `socks5://` or `socks5h://` proxy.                                 |
-| `DEEZER_HTTP_HOST`          | `127.0.0.1`              | HTTP listen address. Use `0.0.0.0` in Docker.                                           |
-| `DEEZER_HTTP_PORT`          | `5000`                   | HTTP listen port.                                                                       |
-| `DEEZER_URL_PREFIX`         | empty                    | Reverse-proxy path prefix, for example `/deezer`.                                       |
-| `DEEZER_AUTH_USER`          | empty                    | HTTP Basic auth user. Set with `DEEZER_AUTH_PASSWORD` to require a login.               |
-| `DEEZER_AUTH_PASSWORD`      | empty                    | HTTP Basic auth password. `/api/health` stays public for health checks.                 |
-| `DEEZER_WORKERS`            | `4`                      | Number of download workers (1–32).                                                      |
-| `DEEZER_TASK_HISTORY`       | `500`                    | Maximum number of completed/failed tasks kept in memory.                                |
-| `DEEZER_DOWNLOAD_DIR`       | `/tmp/deezer-downloader` | Base download directory.                                                                |
-| `DEEZER_SONGS_DIR`          | `${base}/songs`          | Optional track directory override.                                                      |
-| `DEEZER_ALBUMS_DIR`         | `${base}/albums`         | Optional album directory override.                                                      |
-| `DEEZER_PLAYLISTS_DIR`      | `${base}/playlists`      | Optional playlist directory override.                                                   |
-| `DEEZER_ZIPS_DIR`           | `${base}/zips`           | Optional ZIP directory override.                                                        |
-| `DEEZER_YOUTUBE_DIR`        | `${base}/youtube-dl`     | Optional yt-dlp directory override.                                                     |
-| `DEEZER_MPD_ENABLED`        | `false`                  | Enable MPD integration.                                                                 |
-| `DEEZER_MPD_HOST`           | `localhost`              | MPD host.                                                                               |
-| `DEEZER_MPD_PORT`           | `6600`                   | MPD port.                                                                               |
-| `DEEZER_MPD_MUSIC_DIR_ROOT` | —                        | Required when MPD is enabled. All download directories must be inside it.               |
-| `DEEZER_YTDLP_PATH`         | `yt-dlp`                 | yt-dlp executable name or absolute path.                                                |
-| `DEEZER_FFMPEG_PATH`        | `ffmpeg`                 | ffmpeg executable name or absolute path.                                                |
-| `DEEZER_METAFLAC_PATH`      | `metaflac`               | metaflac executable name or absolute path.                                              |
-| `DEEZER_LOG_LEVEL`          | `info`                   | `fatal`, `error`, `warn`, `info`, `debug` or `trace`.                                   |
-| `DEEZER_LOG_FILE`           | empty                    | If set, logs are mirrored to this file and `/api/debug` tails it.                       |
-| `DEEZER_DEBUG_COMMAND`      | empty                    | Optional shell command used by `/api/debug`; overrides the log-file tail.               |
+| Variable                      | Default                  | Description                                                                             |
+| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
+| `DEEZER_COOKIE_ARL`           | **required**             | Deezer ARL cookie.                                                                      |
+| `DEEZER_QUALITY`              | `mp3`                    | `mp3` or `flac`. FLAC requires a lossless account; otherwise the app falls back to MP3. |
+| `DEEZER_PROXY_URL`            | empty                    | Optional `https://`, `socks5://` or `socks5h://` proxy.                                 |
+| `DEEZER_HTTP_HOST`            | `127.0.0.1`              | HTTP listen address. Use `0.0.0.0` in Docker.                                           |
+| `DEEZER_HTTP_PORT`            | `5000`                   | HTTP listen port.                                                                       |
+| `DEEZER_URL_PREFIX`           | empty                    | Reverse-proxy path prefix, for example `/deezer`.                                       |
+| `DEEZER_AUTH_USER`            | empty                    | HTTP Basic auth user. Set with `DEEZER_AUTH_PASSWORD` to require a login.               |
+| `DEEZER_AUTH_PASSWORD`        | empty                    | HTTP Basic auth password. `/api/health` stays public for health checks.                 |
+| `DEEZER_WORKERS`              | `4`                      | Number of download workers (1–32).                                                      |
+| `DEEZER_TASK_HISTORY`         | `500`                    | Maximum number of completed/failed tasks kept in memory.                                |
+| `DEEZER_DOWNLOAD_DIR`         | `/tmp/deezer-downloader` | Base download directory.                                                                |
+| `DEEZER_SONGS_DIR`            | `${base}/songs`          | Optional track directory override.                                                      |
+| `DEEZER_ALBUMS_DIR`           | `${base}/albums`         | Optional album directory override.                                                      |
+| `DEEZER_PLAYLISTS_DIR`        | `${base}/playlists`      | Optional playlist directory override.                                                   |
+| `DEEZER_ZIPS_DIR`             | `${base}/zips`           | Optional ZIP directory override.                                                        |
+| `DEEZER_YOUTUBE_DIR`          | `${base}/youtube-dl`     | Optional yt-dlp directory override.                                                     |
+| `DEEZER_YOUTUBE_PLAYLIST_MAX` | `500`                    | Maximum number of songs taken from one YouTube playlist (1–10000).                      |
+| `DEEZER_MPD_ENABLED`          | `false`                  | Enable MPD integration.                                                                 |
+| `DEEZER_MPD_HOST`             | `localhost`              | MPD host.                                                                               |
+| `DEEZER_MPD_PORT`             | `6600`                   | MPD port.                                                                               |
+| `DEEZER_MPD_MUSIC_DIR_ROOT`   | —                        | Required when MPD is enabled. All download directories must be inside it.               |
+| `DEEZER_YTDLP_PATH`           | `yt-dlp`                 | yt-dlp executable name or absolute path.                                                |
+| `DEEZER_FFMPEG_PATH`          | `ffmpeg`                 | ffmpeg executable name or absolute path.                                                |
+| `DEEZER_METAFLAC_PATH`        | `metaflac`               | metaflac executable name or absolute path.                                              |
+| `DEEZER_LOG_LEVEL`            | `info`                   | `fatal`, `error`, `warn`, `info`, `debug` or `trace`.                                   |
+| `DEEZER_LOG_FILE`             | empty                    | If set, logs are mirrored to this file and `/api/debug` tails it.                       |
+| `DEEZER_DEBUG_COMMAND`        | empty                    | Optional shell command used by `/api/debug`; overrides the log-file tail.               |
 
 Relative paths are resolved against the current working directory. The app creates all download
 directories at startup and fails early with an actionable error if a configured executable is
@@ -175,6 +177,7 @@ All routes are under the configured prefix plus `/api`. The current API is compa
 | `POST` | `/api/download`         | Queue a track or album download.                                                                 |
 | `POST` | `/api/youtubedl`        | Queue a YouTube download.                                                                        |
 | `POST` | `/api/playlist/deezer`  | Queue a Deezer playlist download.                                                                |
+| `POST` | `/api/playlist/youtube` | Queue a YouTube playlist download (`url`, `add_to_playlist`, `create_zip`).                      |
 | `POST` | `/api/favorites/deezer` | Queue a Deezer favourites download.                                                              |
 | `GET`  | `/api/queue`            | Current queue and task history.                                                                  |
 | `GET`  | `/api/queue/events`     | SSE stream of queue updates.                                                                     |
