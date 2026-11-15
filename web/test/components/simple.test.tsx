@@ -28,15 +28,14 @@ describe('EmptyState', () => {
 
 describe('PageHeader', () => {
   it('renders all parts', () => {
-    render(<PageHeader index="01" eyebrow="Eyebrow" title="Title" description="Desc" actions={<button>Act</button>} />);
+    render(<PageHeader title="Title" description="Desc" actions={<button>Act</button>} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Title' })).toBeInTheDocument();
-    expect(screen.getByText('01')).toBeInTheDocument();
     expect(screen.getByText('Desc')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Act' })).toBeInTheDocument();
   });
 
   it('omits optional parts', () => {
-    render(<PageHeader index="01" eyebrow="Eyebrow" title="Title" />);
+    render(<PageHeader title="Title" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByText('Desc')).not.toBeInTheDocument();
   });

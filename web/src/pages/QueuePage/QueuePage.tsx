@@ -137,8 +137,6 @@ export function QueuePage() {
   return (
     <div>
       <PageHeader
-        index="06"
-        eyebrow="Queue"
         title={
           <>
             On the <em>turntable</em>

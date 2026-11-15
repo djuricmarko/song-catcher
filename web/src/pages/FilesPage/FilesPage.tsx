@@ -137,8 +137,6 @@ export function FilesPage() {
   return (
     <div>
       <PageHeader
-        index="04"
-        eyebrow="Library"
         title={
           <>
             Everything <em>on the shelf</em>

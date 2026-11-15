@@ -178,8 +178,6 @@ export function SearchPage() {
   return (
     <div className={styles.page}>
       <PageHeader
-        index="01"
-        eyebrow="Search"
         title={
           <>
             Find something <em>worth keeping</em>

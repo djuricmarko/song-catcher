@@ -7,7 +7,6 @@ import { useAppConfig } from './hooks/useAppConfig';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useQueue } from './hooks/useQueue';
 import { cn } from './lib/cn';
-import { formatIndex } from './lib/format';
 import { DebugPage } from './pages/DebugPage';
 import { DeezerPage } from './pages/DeezerPage';
 import { FilesPage } from './pages/FilesPage';
@@ -22,6 +21,7 @@ interface NavItem {
   label: string;
   tabLabel?: string;
   icon: LucideIcon;
+  group: 'download' | 'collection' | 'system';
   end?: boolean;
 }
 
@@ -29,62 +29,73 @@ const QUEUE_PATH = '/queue';
 const LOGS_PATH = '/debug';
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Search', tabLabel: 'Search', icon: Search, end: true },
-  { to: '/youtube', label: 'Video links', tabLabel: 'Links', icon: Video },
-  { to: '/deezer', label: 'Playlists', tabLabel: 'Playlists', icon: ListMusic },
-  { to: '/files', label: 'Library', tabLabel: 'Library', icon: FolderOpen },
-  { to: LOGS_PATH, label: 'Logs', icon: Terminal },
-  { to: QUEUE_PATH, label: 'Queue', tabLabel: 'Queue', icon: ListTodo },
+  { to: '/', label: 'Search', tabLabel: 'Search', icon: Search, group: 'download', end: true },
+  { to: '/youtube', label: 'Video links', tabLabel: 'Links', icon: Video, group: 'download' },
+  { to: '/deezer', label: 'Playlists', tabLabel: 'Playlists', icon: ListMusic, group: 'download' },
+  { to: '/files', label: 'Library', tabLabel: 'Library', icon: FolderOpen, group: 'collection' },
+  { to: LOGS_PATH, label: 'Logs', icon: Terminal, group: 'system' },
+  { to: QUEUE_PATH, label: 'Queue', tabLabel: 'Queue', icon: ListTodo, group: 'collection' },
 ];
 
 const NAV_PATHS = NAV_ITEMS.map((item) => item.to);
 
-function Brand({ logoSize, version }: { logoSize: number; version?: string }) {
-  const appName = (
-    <p className={styles.appName}>
-      Song<span>catcher</span>
-    </p>
-  );
-
+function Brand({ version }: { version?: string }) {
   return (
     <div className={styles.brand}>
       <span className={styles.logo} aria-hidden>
-        <Disc3 size={logoSize} strokeWidth={1.75} />
+        <Disc3 size={14} strokeWidth={2} />
       </span>
-      {version === undefined ? (
-        appName
-      ) : (
-        <div className={styles.brandText}>
-          {appName}
-          <p className={styles.version}>{version}</p>
-        </div>
-      )}
+      <p className={styles.appName}>Songcatcher</p>
+      {version === undefined ? null : <span className={styles.version}>{version}</span>}
     </div>
+  );
+}
+
+function SidebarLink({ item, pendingTasks }: { item: NavItem; pendingTasks: number }) {
+  const { to, label, icon: Icon, end } = item;
+  const shortcut = NAV_PATHS.indexOf(to) + 1;
+
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) => cn(styles.navLink, isActive && styles.navLinkActive)}
+      title={`${label} (Ctrl+Shift+${shortcut})`}
+    >
+      <Icon size={15} strokeWidth={1.75} aria-hidden className={styles.navIcon} />
+      <span className={styles.navLabel}>{label}</span>
+      {to === QUEUE_PATH && pendingTasks > 0 ? <span className={styles.navCount}>{pendingTasks}</span> : null}
+    </NavLink>
   );
 }
 
 function Sidebar({ pendingTasks }: { pendingTasks: number }) {
   const config = useAppConfig();
+  const groupItems = (group: NavItem['group']) => NAV_ITEMS.filter((item) => item.group === group);
 
   return (
     <aside className={styles.sidebar}>
-      <Brand logoSize={18} version={config.data ? `v${config.data.version}` : '—'} />
+      <Brand version={config.data ? `v${config.data.version}` : '—'} />
 
       <nav className={styles.nav} aria-label="Main">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }, index) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) => cn(styles.navLink, isActive && styles.navLinkActive)}
-            title={`${label} (Ctrl+Shift+${index + 1})`}
-          >
-            <span className={styles.navIndex}>{formatIndex(index + 1)}</span>
-            <Icon size={16} strokeWidth={1.75} aria-hidden className={styles.navIcon} />
-            <span className={styles.navLabel}>{label}</span>
-            {to === QUEUE_PATH && pendingTasks > 0 ? <span className={styles.navCount}>{pendingTasks}</span> : null}
-          </NavLink>
+        {(
+          [
+            ['download', 'Download'],
+            ['collection', 'Collection'],
+          ] as const
+        ).map(([group, heading]) => (
+          <div key={group} className={styles.navGroup}>
+            <p className={styles.navHeading}>{heading}</p>
+            {groupItems(group).map((item) => (
+              <SidebarLink key={item.to} item={item} pendingTasks={pendingTasks} />
+            ))}
+          </div>
         ))}
+        <div className={cn(styles.navGroup, styles.navGroupEnd)}>
+          {groupItems('system').map((item) => (
+            <SidebarLink key={item.to} item={item} pendingTasks={pendingTasks} />
+          ))}
+        </div>
       </nav>
 
       <div className={styles.sidebarFooter}>
@@ -94,20 +105,44 @@ function Sidebar({ pendingTasks }: { pendingTasks: number }) {
             MPD linked
           </p>
         ) : null}
-        <ThemeSwitch />
-        <p className={styles.shortcutHint}>
-          <kbd>Ctrl</kbd>
-          <kbd>M</kbd> focus search
-        </p>
+        <div className={styles.footerRow}>
+          <ThemeSwitch />
+          <p className={styles.shortcutHint}>
+            <kbd>Ctrl</kbd>
+            <kbd>M</kbd>
+            <span>search</span>
+          </p>
+        </div>
       </div>
     </aside>
+  );
+}
+
+function Toolbar({ pendingTasks }: { pendingTasks: number }) {
+  const { pathname } = useLocation();
+  const current = NAV_ITEMS.find(({ to, end }) => (end ? pathname === to : pathname.startsWith(to)));
+  const Icon = current?.icon ?? Search;
+
+  return (
+    <div className={styles.toolbar}>
+      <p className={styles.toolbarTitle}>
+        <Icon size={15} strokeWidth={1.75} aria-hidden />
+        {current?.label ?? 'Search'}
+      </p>
+      {pendingTasks > 0 && pathname !== QUEUE_PATH ? (
+        <NavLink to={QUEUE_PATH} className={styles.toolbarChip}>
+          <span className={styles.toolbarChipDot} aria-hidden />
+          {pendingTasks} downloading
+        </NavLink>
+      ) : null}
+    </div>
   );
 }
 
 function TopBar() {
   return (
     <header className={styles.topbar}>
-      <Brand logoSize={16} />
+      <Brand />
       <div className={styles.topbarActions}>
         <NavLink
           to={LOGS_PATH}
@@ -159,6 +194,7 @@ export default function App() {
       <TopBar />
 
       <main className={styles.main}>
+        <Toolbar pendingTasks={pendingTasks} />
         <div className={styles.content}>
           <Routes>
             <Route path="/" element={<SearchPage />} />

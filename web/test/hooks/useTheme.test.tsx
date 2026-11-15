@@ -21,10 +21,10 @@ describe('applyTheme', () => {
   it('applies explicit preferences and the matching theme colour', () => {
     applyTheme('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(meta.content).toBe('#0c0b0a');
+    expect(meta.content).toBe('#000000');
     applyTheme('light');
     expect(document.documentElement.dataset.theme).toBe('light');
-    expect(meta.content).toBe('#e6e1d5');
+    expect(meta.content).toBe('#fcfcfc');
   });
 
   it('resolves system from prefers-color-scheme', () => {

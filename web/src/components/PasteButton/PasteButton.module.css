@@ -14,7 +14,7 @@
 
 .button:active {
   background-color: var(--surface-hover);
-  color: var(--signal);
+  color: var(--ink);
 }
 
 @media (hover: hover) {

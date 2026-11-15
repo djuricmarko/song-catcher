@@ -19,8 +19,6 @@ export function DebugPage() {
   return (
     <div>
       <PageHeader
-        index="05"
-        eyebrow="Logs"
         title={
           <>
             Under <em>the hood</em>

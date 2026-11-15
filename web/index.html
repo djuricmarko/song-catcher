@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#e6e1d5" />
+    <meta name="theme-color" content="#fcfcfc" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Song Catcher" />
@@ -26,7 +26,7 @@
         if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.dataset.theme = t;
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.content = t === 'dark' ? '#0c0b0a' : '#e6e1d5';
+        if (meta) meta.content = t === 'dark' ? '#000000' : '#fcfcfc';
       })();
     </script>
   </head>

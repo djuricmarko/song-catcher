@@ -24,7 +24,7 @@ export function applyTheme(preference: ThemePreference = readPreference()): void
   document.documentElement.dataset.theme = resolved;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) {
-    meta.content = { light: '#e6e1d5', dark: '#0c0b0a' }[resolved];
+    meta.content = { light: '#fcfcfc', dark: '#000000' }[resolved];
   }
 }
 

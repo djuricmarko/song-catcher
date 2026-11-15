@@ -86,8 +86,6 @@ export function DeezerPage() {
   return (
     <div>
       <PageHeader
-        index="03"
-        eyebrow="Playlists"
         title={
           <>
             Bring the <em>whole crate</em>
