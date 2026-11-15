@@ -25,7 +25,6 @@ function ThemedToaster() {
   const compact = useMediaQuery(COMPACT_LAYOUT_QUERY);
 
   if (compact) {
-    // Sit just above the bottom tab bar, clear of the home indicator.
     const bottom = 'calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 0.75rem)';
     return (
       <Toaster

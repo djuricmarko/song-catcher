@@ -10,7 +10,6 @@ const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const
 export type Quality = (typeof QUALITIES)[number];
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-/** The validated configuration of the whole app. Deeply frozen; read it, never change it. */
 export interface AppConfig {
   deezer: {
     cookieArl: string;
@@ -21,7 +20,6 @@ export interface AppConfig {
     host: string;
     port: number;
     urlPrefix: string;
-    /** HTTP Basic credentials; undefined disables authentication. */
     auth: { user: string; password: string } | undefined;
   };
   downloads: {
@@ -37,7 +35,6 @@ export interface AppConfig {
     historyLimit: number;
   };
   youtube: {
-    /** Upper bound of songs taken from one playlist. */
     playlistMaxEntries: number;
   };
   mpd: {
@@ -63,7 +60,6 @@ export interface LoadConfigOptions {
   cwd?: string;
 }
 
-/** Thrown by `loadConfig`; its message lists every problem so they can be fixed in one go. */
 export class ConfigError extends Error {
   public readonly issues: string[];
 
@@ -74,14 +70,6 @@ export class ConfigError extends Error {
   }
 }
 
-const DEFAULT_DOWNLOAD_DIR = '/tmp/deezer-downloader';
-const TRUE_VALUES = ['true', '1', 'yes', 'on'];
-const FALSE_VALUES = ['false', '0', 'no', 'off'];
-
-// --- Building blocks for environment variables ---------------------------------
-// Variables arrive as strings, or not at all. Each helper turns one into a
-// trimmed, typed value and applies a default when it is unset.
-
 const envText = (fallback = '') =>
   z
     .string()
@@ -91,7 +79,6 @@ const envText = (fallback = '') =>
 const requiredEnvText = (fallback: string) =>
   envText(fallback).refine((value) => value.length > 0, 'must not be empty');
 
-/** Unset and blank both mean "not configured". */
 const optionalEnvText = z
   .string()
   .optional()
@@ -105,17 +92,15 @@ const envBoolean = z.preprocess((value) => {
     return false;
   }
   if (typeof value !== 'string') {
-    // Environment variables are always text; anything else is for the schema to judge.
     return value;
   }
   const normalized = value.trim().toLowerCase();
-  if (TRUE_VALUES.includes(normalized)) {
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
     return true;
   }
-  if (FALSE_VALUES.includes(normalized)) {
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
     return false;
   }
-  // Left as it is, so validation fails and names the variable.
   return value;
 }, z.boolean());
 
@@ -125,7 +110,6 @@ const envInteger = (fallback: number, min: number, max: number) =>
     z.number().int().min(min).max(max),
   );
 
-/** One of a fixed set of words, in any letter case. */
 const envEnum = <const Values extends readonly [string, ...string[]]>(values: Values, fallback: Values[number]) =>
   z
     .string()
@@ -133,7 +117,6 @@ const envEnum = <const Values extends readonly [string, ...string[]]>(values: Va
     .transform((value) => value.trim().toLowerCase())
     .pipe(z.enum(values));
 
-/** Turns `deezer`, `/deezer/` and the like into `/deezer`; no prefix becomes an empty string. */
 export function normalizeUrlPrefix(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed === '/') {
@@ -156,14 +139,13 @@ const envSchema = z.object({
     .refine((value) => value === '' || /^\/[A-Za-z0-9._~/-]+$/.test(value), 'must be a path such as /deezer')
     .refine((value) => !value.includes('..'), 'must not contain ".."'),
   DEEZER_AUTH_USER: optionalEnvText,
-  // Not trimmed: a password may deliberately start or end with a space.
   DEEZER_AUTH_PASSWORD: z
     .string()
     .optional()
     .transform((value) => (value ? value : undefined)),
   DEEZER_WORKERS: envInteger(4, 1, 32),
   DEEZER_TASK_HISTORY: envInteger(500, 10, 10000),
-  DEEZER_DOWNLOAD_DIR: requiredEnvText(DEFAULT_DOWNLOAD_DIR),
+  DEEZER_DOWNLOAD_DIR: requiredEnvText('/tmp/deezer-downloader'),
   DEEZER_SONGS_DIR: optionalEnvText,
   DEEZER_ALBUMS_DIR: optionalEnvText,
   DEEZER_PLAYLISTS_DIR: optionalEnvText,
@@ -194,7 +176,6 @@ function expandHome(input: string): string {
   return input;
 }
 
-/** Makes a configured path absolute: `~` is the home directory, relative paths start at `cwd`. */
 function resolvePath(input: string, cwd: string): string {
   return path.resolve(cwd, expandHome(input.trim()));
 }
@@ -208,7 +189,6 @@ function deepFreeze<T extends object>(value: T): T {
   return Object.freeze(value);
 }
 
-/** One line per problem, each starting with the variable it is about. */
 function formatZodIssues(env: NodeJS.ProcessEnv, issues: z.core.$ZodIssue[]): string[] {
   const messages = issues.map((issue) => {
     const key = issue.path.join('.') || 'environment';
@@ -235,7 +215,6 @@ function resolveDownloadDirectories(raw: RawEnv, cwd: string): AppConfig['downlo
   };
 }
 
-/** Rules that involve more than one variable and so cannot live in the schema. */
 function crossFieldIssues(raw: RawEnv, downloads: AppConfig['downloads'], musicDirRoot: string | undefined): string[] {
   const issues: string[] = [];
 
@@ -243,7 +222,6 @@ function crossFieldIssues(raw: RawEnv, downloads: AppConfig['downloads'], musicD
     issues.push('DEEZER_AUTH_USER and DEEZER_AUTH_PASSWORD must be set together');
   }
   if (raw.DEEZER_AUTH_USER?.includes(':')) {
-    // HTTP Basic auth separates user and password with the first colon.
     issues.push('DEEZER_AUTH_USER must not contain ":"');
   }
 
@@ -251,7 +229,6 @@ function crossFieldIssues(raw: RawEnv, downloads: AppConfig['downloads'], musicD
     if (!musicDirRoot) {
       issues.push('DEEZER_MPD_MUSIC_DIR_ROOT is required when DEEZER_MPD_ENABLED=true');
     } else {
-      // MPD can only play files it finds below its music directory.
       for (const directory of Object.values(downloads)) {
         if (!isPathInside(musicDirRoot, directory)) {
           issues.push(`${directory} must be inside DEEZER_MPD_MUSIC_DIR_ROOT (${musicDirRoot}) when MPD is enabled`);
@@ -262,12 +239,6 @@ function crossFieldIssues(raw: RawEnv, downloads: AppConfig['downloads'], musicD
   return issues;
 }
 
-/**
- * Pure configuration loader. It validates and normalizes environment variables
- * but does not touch the filesystem; see `checkEnvironment` for that.
- *
- * @throws ConfigError listing every invalid or missing variable.
- */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadConfigOptions = {}): AppConfig {
   const cwd = options.cwd ?? process.cwd();
   const parsed = envSchema.safeParse(env);
@@ -327,7 +298,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
   });
 }
 
-/** A copy of the configuration that is safe to print: the ARL and the password are masked. */
 export function redactConfig(config: AppConfig): unknown {
   return {
     ...config,

@@ -4,13 +4,6 @@ import type { AppConfig } from '../config/env.js';
 import { MpdClient } from '../mpd/client.js';
 import { mpdRelativePath } from './paths.js';
 
-/**
- * Tells MPD about freshly downloaded files: always rescans the library and,
- * when asked, appends the files to the current playlist.
- *
- * MPD is a convenience, so nothing here throws; problems are only logged and
- * the download still counts as successful.
- */
 export async function syncWithMpd(
   mpd: AppConfig['mpd'],
   files: readonly string[],
@@ -42,7 +35,6 @@ export async function syncWithMpd(
         logger.error({ err: error, file }, 'cannot add file to MPD');
         continue;
       }
-      // The rescan runs in the background; a file can only be added once it is indexed.
       if (await client.waitForFile(relative)) {
         await client.add(relative);
         logger.info({ file: relative }, 'added file to MPD playlist');

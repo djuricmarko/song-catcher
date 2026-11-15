@@ -1,6 +1,5 @@
 import { fileExtension } from './paths';
 
-// Minimal typing for the File System Access API (not in TypeScript's DOM lib).
 interface SaveFilePickerOptions {
   suggestedName?: string;
   types?: Array<{ description?: string; accept: Record<string, string[]> }>;
@@ -16,13 +15,6 @@ interface SaveFileHandle {
 
 type ShowSaveFilePicker = (options?: SaveFilePickerOptions) => Promise<SaveFileHandle>;
 
-const MIME_BY_EXTENSION: Record<string, string> = {
-  mp3: 'audio/mpeg',
-  flac: 'audio/flac',
-  m3u8: 'application/vnd.apple.mpegurl',
-  zip: 'application/zip',
-};
-
 export type SaveResult = 'saved' | 'cancelled' | 'fallback';
 
 function fallbackDownload(url: string, fileName: string): void {
@@ -35,13 +27,6 @@ function fallbackDownload(url: string, fileName: string): void {
   link.remove();
 }
 
-/**
- * Asks the user where to save `fileName`, then streams `url` into it.
- *
- * Browsers without the File System Access API (Firefox, Safari) fall back to
- * a regular download; whether they ask for a location then depends on the
- * browser's own "always ask where to save files" setting.
- */
 export async function saveFile(url: string, fileName: string, onStart?: () => void): Promise<SaveResult> {
   const picker = (window as { showSaveFilePicker?: ShowSaveFilePicker }).showSaveFilePicker;
   if (!picker) {
@@ -50,7 +35,12 @@ export async function saveFile(url: string, fileName: string, onStart?: () => vo
   }
 
   const extension = fileExtension(fileName);
-  const mime = MIME_BY_EXTENSION[extension];
+  const mime = new Map([
+    ['mp3', 'audio/mpeg'],
+    ['flac', 'audio/flac'],
+    ['m3u8', 'application/vnd.apple.mpegurl'],
+    ['zip', 'application/zip'],
+  ]).get(extension);
 
   let handle: SaveFileHandle;
   try {
@@ -72,7 +62,6 @@ export async function saveFile(url: string, fileName: string, onStart?: () => vo
     throw new Error(`Download failed: ${response.status} ${response.statusText}`);
   }
   const writable = await handle.createWritable();
-  // pipeTo closes the writable on success and aborts it on failure.
   await response.body.pipeTo(writable);
   return 'saved';
 }

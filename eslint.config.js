@@ -11,7 +11,6 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        // Type-aware rules read each workspace's own tsconfig.
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
@@ -22,17 +21,15 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      // `Thing[]` for simple element types, `Array<{ ... }>` for anything longer.
       '@typescript-eslint/array-type': ['error', { default: 'array-simple' }],
-      // Numbers in template strings are fine; objects are not.
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
-      // `text || fallback` deliberately treats an empty string like a missing one.
       '@typescript-eslint/prefer-nullish-coalescing': [
         'error',
         { ignorePrimitives: { string: true }, ignoreTernaryTests: true },
       ],
       // Fastify handlers and hooks must be async even when they await nothing.
       '@typescript-eslint/require-await': 'off',
+      'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
   {
@@ -58,7 +55,6 @@ export default tseslint.config(
     },
   },
   {
-    // Plain JavaScript config files are not part of any tsconfig.
     files: ['**/*.js'],
     ...tseslint.configs.disableTypeChecked,
   },

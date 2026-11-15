@@ -17,7 +17,6 @@ import type {
 
 import { encodePath } from '../lib/paths';
 
-/** Where the app is mounted; the server inlines this into index.html. */
 interface RuntimeConfig {
   apiRoot?: string;
   appRoot?: string;
@@ -29,20 +28,16 @@ declare global {
   }
 }
 
-// The fallbacks apply in development, where Vite serves the page and proxies the API.
 export const API_ROOT = window.__APP_CONFIG__?.apiRoot ?? '/api';
 export const APP_ROOT = window.__APP_CONFIG__?.appRoot ?? '';
 
-/** The server's explanation of a failed request, or the HTTP status when it sent none. */
 async function failureMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as Partial<ApiErrorResponse>;
     if (body.error) {
       return body.details?.length ? `${body.error}: ${body.details.join(', ')}` : body.error;
     }
-  } catch {
-    // Not JSON; fall through to the status-based message.
-  }
+  } catch {}
   return `${response.status} ${response.statusText}`;
 }
 
@@ -72,13 +67,10 @@ export function getConfig(): Promise<ApiConfigResponse> {
   return request<ApiConfigResponse>('/config');
 }
 
-/** For the `album_track` and `artist_*` types, `query` is the id of the album or artist. */
 export function searchMusic(type: SearchType, query: string): Promise<SearchResultDto[]> {
   const body: SearchRequest = { type, query };
   return post<SearchResultDto[]>('/search', body);
 }
-
-// The functions below only queue a download; follow its progress through the queue.
 
 export function startDownload(payload: DownloadRequest): Promise<TaskAcceptedResponse> {
   return post<TaskAcceptedResponse>('/download', payload);
@@ -124,7 +116,6 @@ export function getQueue(): Promise<QueueTask[]> {
   return request<QueueTask[]>('/queue');
 }
 
-/** Lists a directory of the download folder; `path` is relative to it. */
 export function getFiles(path: string): Promise<FilesResponse> {
   return request<FilesResponse>(`/files?path=${encodeURIComponent(path)}`);
 }
@@ -133,7 +124,6 @@ export function getDebug(): Promise<DebugResponse> {
   return request<DebugResponse>('/debug');
 }
 
-/** The URL a downloaded file is served from; `filePath` is relative to the download folder. */
 export function downloadUrl(filePath: string): string {
   return `${APP_ROOT}/downloads/${encodePath(filePath)}`;
 }

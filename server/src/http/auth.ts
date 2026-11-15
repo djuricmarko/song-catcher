@@ -7,7 +7,6 @@ import type { ApiFastifyInstance } from './types.js';
 
 type Credentials = NonNullable<AppConfig['http']['auth']>;
 
-/** Compares in constant time, so response timing does not reveal how much of a guess was right. */
 function safeEqual(first: string, second: string): boolean {
   const a = Buffer.from(first, 'utf8');
   const b = Buffer.from(second, 'utf8');
@@ -15,7 +14,6 @@ function safeEqual(first: string, second: string): boolean {
   return a.length === b.length ? timingSafeEqual(a, b) : !timingSafeEqual(a, a);
 }
 
-/** Returns true when the Authorization header carries the configured credentials. */
 export function checkBasicAuth(header: string | undefined, expected: Credentials): boolean {
   const match = /^Basic\s+([A-Za-z0-9+/=]+)\s*$/i.exec(header ?? '');
   if (!match?.[1]) {
@@ -26,16 +24,11 @@ export function checkBasicAuth(header: string | undefined, expected: Credentials
   if (separator === -1) {
     return false;
   }
-  // Check both parts even when the first is wrong, again for uniform timing.
   const userOk = safeEqual(decoded.slice(0, separator), expected.user);
   const passwordOk = safeEqual(decoded.slice(separator + 1), expected.password);
   return userOk && passwordOk;
 }
 
-/**
- * Requires HTTP Basic credentials for every request except `publicPath`.
- * Must be registered before the routes it is meant to protect.
- */
 export function registerBasicAuth(app: ApiFastifyInstance, credentials: Credentials, publicPath: string): void {
   app.addHook('onRequest', async (request, reply) => {
     if (request.url.split('?')[0] === publicPath) {

@@ -4,7 +4,6 @@ import type { FastifyBaseLogger } from 'fastify';
 import { Deezer403Exception, Deezer404Exception, DeezerApiException } from '../deezer/errors.js';
 import { FileAccessError } from './files.js';
 
-/** A request whose body or query string does not match the expected shape. */
 export class ApiValidationError extends Error {
   public constructor(public readonly details: string[]) {
     super('invalid request');
@@ -17,7 +16,6 @@ export interface ErrorResponse {
   body: ApiErrorResponse;
 }
 
-/** Errors that are part of normal operation and tell the client what went wrong. */
 function expectedErrorResponse(error: unknown): ErrorResponse | undefined {
   if (error instanceof ApiValidationError) {
     return { statusCode: 400, body: { error: 'invalid request', details: error.details } };
@@ -32,7 +30,6 @@ function expectedErrorResponse(error: unknown): ErrorResponse | undefined {
     return { statusCode: 403, body: { error: error.message } };
   }
   if (error instanceof DeezerApiException) {
-    // The request was fine; the upstream service failed.
     return { statusCode: 502, body: { error: error.message } };
   }
   return undefined;
@@ -44,10 +41,6 @@ function httpStatusOf(error: unknown): number {
   return typeof statusCode === 'number' && statusCode >= 400 ? statusCode : 500;
 }
 
-/**
- * Decides how a failed request is answered. Unexpected errors are logged and,
- * for server faults, answered without details so internals do not leak.
- */
 export function errorResponse(error: unknown, logger: FastifyBaseLogger): ErrorResponse {
   const expected = expectedErrorResponse(error);
   if (expected) {

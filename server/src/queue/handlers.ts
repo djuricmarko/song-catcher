@@ -1,7 +1,6 @@
 import type { DownloadService } from '../downloads/service.js';
 import type { DownloadScheduler } from './tasks.js';
 
-/** Connects every kind of queued task to the download that carries it out. */
 export function registerDownloadHandlers(scheduler: DownloadScheduler, downloads: DownloadService): void {
   scheduler.register('download_deezer_song_and_queue', (args, { reportProgress }) =>
     downloads.downloadTrack(args.track_id, args.add_to_playlist, reportProgress),

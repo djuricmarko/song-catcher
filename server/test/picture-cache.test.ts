@@ -23,7 +23,6 @@ describe('PictureCache', () => {
 
     void cache.get('a', load('a'));
     void cache.get('b', load('b'));
-    // Touch "a" so "b" becomes the oldest.
     void cache.get('a', load('a'));
     void cache.get('c', load('c'));
 

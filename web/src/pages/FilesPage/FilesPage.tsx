@@ -18,23 +18,18 @@ import { saveFile } from '../../lib/saveFile';
 
 import styles from './FilesPage.module.css';
 
-const AUDIO_EXTENSIONS = new Set(['mp3', 'flac', 'm3u8']);
-const SKELETON_ROWS = 5;
-
 function FileIcon({ name }: { name: string }) {
   const extension = fileExtension(name);
   if (extension === 'zip') {
     return <FileArchive size={18} strokeWidth={1.5} className={styles.iconArchive} aria-hidden />;
   }
-  if (AUDIO_EXTENSIONS.has(extension)) {
+  if (['mp3', 'flac', 'm3u8'].includes(extension)) {
     return <FileAudio size={18} strokeWidth={1.5} className={styles.iconAudio} aria-hidden />;
   }
   return <File size={18} strokeWidth={1.5} className={styles.iconFile} aria-hidden />;
 }
 
-/** Saves a file through the "save as" dialog where the browser has one, reporting progress as a toast. */
 async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: string, fileName: string) {
-  // Let modified clicks (new tab, etc.) keep their normal link behaviour.
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
     return;
   }
@@ -53,7 +48,6 @@ async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: strin
   }
 }
 
-/** The route that shows the directory at `path`, which is relative to the download folder. */
 function filesRoute(path: string): string {
   return path ? `/files/${encodePath(path)}` : '/files';
 }
@@ -96,7 +90,6 @@ function FileRow({ entry }: { entry: FileEntry }) {
 
 export function FilesPage() {
   const params = useParams();
-  // The part of the URL after /files/ is the directory being shown.
   const currentPath = params['*'] ?? '';
 
   const files = useQuery({
@@ -118,7 +111,7 @@ export function FilesPage() {
     if (files.isLoading) {
       return (
         <div className={styles.listing}>
-          {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+          {Array.from({ length: 5 }, (_, index) => (
             <div key={index} className={styles.skeleton} />
           ))}
         </div>
@@ -138,7 +131,6 @@ export function FilesPage() {
     if (files.data) {
       return <EmptyState title="This shelf is empty">Downloads show up here as soon as they finish.</EmptyState>;
     }
-    // Loading failed; the alert above says why.
     return null;
   }
 

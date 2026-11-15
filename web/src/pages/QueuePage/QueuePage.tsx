@@ -17,17 +17,8 @@ import { basename } from '../../lib/paths';
 
 import styles from './QueuePage.module.css';
 
-/** The progress meter is drawn as this many segments, like an LED level meter. */
 const METER_SEGMENTS = 24;
 
-const SUMMARY: Array<{ state: TaskState; label: string }> = [
-  { state: 'active', label: 'Running' },
-  { state: 'waiting', label: 'Waiting' },
-  { state: 'mission accomplished', label: 'Done' },
-  { state: 'failed', label: 'Failed' },
-];
-
-/** How long the task has been running, or ran in total; null before it starts. */
 function taskDuration(task: QueueTask): string | null {
   if (!task.tsStarted) {
     return null;
@@ -36,7 +27,6 @@ function taskDuration(task: QueueTask): string | null {
   return formatDuration(end - task.tsStarted);
 }
 
-/** Progress in percent. Tasks that never report progress jump from 0 to 100 when done. */
 function progressPercent(task: QueueTask): number {
   const [current, maximum] = task.progress;
   if (maximum > 0) {
@@ -77,7 +67,6 @@ function Meter({ task }: { task: QueueTask }) {
   );
 }
 
-/** A collapsed list that opens when its summary line is clicked. */
 function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
   return (
     <Collapsible.Root className={styles.collapsible}>
@@ -168,7 +157,14 @@ export function QueuePage() {
 
       {tasks.length > 0 ? (
         <dl className={styles.summary}>
-          {SUMMARY.map(({ state, label }) => (
+          {(
+            [
+              { state: 'active', label: 'Running' },
+              { state: 'waiting', label: 'Waiting' },
+              { state: 'mission accomplished', label: 'Done' },
+              { state: 'failed', label: 'Failed' },
+            ] as const
+          ).map(({ state, label }) => (
             <div key={state} className={styles.summaryItem}>
               <dt>{label}</dt>
               <dd>{counts[state] ?? 0}</dd>
@@ -183,7 +179,6 @@ export function QueuePage() {
           <Link to="/deezer">Playlists</Link>.
         </EmptyState>
       ) : (
-        // Newest first.
         <ol className={styles.tasks}>
           {[...tasks].reverse().map((task) => (
             <TaskCard key={task.id} task={task} />

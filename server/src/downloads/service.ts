@@ -14,7 +14,6 @@ import { buildSongFilename, cleanFilename, songDirectory, type SongPathType } fr
 import { readPlaylistManifest, writePlaylistManifest, type PlaylistManifest } from './playlist-manifest.js';
 import { downloadWithYtDlp, listYtDlpPlaylist, type YoutubePlaylistEntry } from './youtube.js';
 
-/** The part of the Deezer client that downloads need. */
 export type DeezerService = Pick<
   DeezerClient,
   'parseDeezerPlaylist' | 'getDeezerFavorites' | 'getSongInfosFromWebsite' | 'downloadSong' | 'fileExtension'
@@ -30,14 +29,10 @@ export class DownloadError extends Error {
   }
 }
 
-/** One run over the items of an album or playlist. */
 interface Batch<Item> {
   items: readonly Item[];
-  /** Downloads one item and resolves to the file it ended up in. */
   download: (item: Item) => Promise<string>;
-  /** Names the item in the warning shown to the user. */
   describe: (item: Item) => string;
-  /** Logs a failed item together with whatever identifies it. */
   logFailure: (item: Item, error: unknown) => void;
   onProgress?: ProgressReporter;
   onWarning?: WarningReporter;
@@ -46,7 +41,6 @@ interface Batch<Item> {
 interface CollectionOptions {
   addToPlaylist: boolean;
   createZip: boolean;
-  /** Playlists get an m3u8 file next to their songs; albums are ordered by file name already. */
   withPlaylistFile: boolean;
 }
 
@@ -54,21 +48,12 @@ function songLabel(song: DeezerSong): string {
   return `"${song.ART_NAME || 'unknown artist'} - ${song.SNG_TITLE || song.SNG_ID}"`;
 }
 
-/**
- * Turns "download this track/album/playlist" into files on disk, and follows
- * up with the optional extras: an m3u8 playlist, a zip archive and MPD.
- *
- * Every public download method resolves to the files a user can fetch: the
- * songs themselves, or the single zip when one was requested.
- */
 export class DownloadService {
   public constructor(
     private readonly config: AppConfig,
     private readonly deezer: DeezerService,
     private readonly logger: Logger,
   ) {}
-
-  // --- Deezer ----------------------------------------------------------------
 
   public async downloadTrack(
     trackId: string,
@@ -141,7 +126,6 @@ export class DownloadService {
     return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
   }
 
-  /** Downloads every song a user has marked as a favorite into a `favorites_<userId>` playlist. */
   public async downloadFavorites(
     userId: string,
     addToPlaylist: boolean,
@@ -175,10 +159,6 @@ export class DownloadService {
     return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
   }
 
-  /**
-   * Downloads one song to its final place and returns the path. A song that
-   * is already there is not downloaded again.
-   */
   public async downloadSongToDisk(searchType: SongPathType, song: DeezerSong, playlistName?: string): Promise<string> {
     const directory = songDirectory(this.config.downloads, searchType, song, playlistName);
     await mkdir(directory, { recursive: true });
@@ -194,8 +174,6 @@ export class DownloadService {
     this.logger.info({ file: absoluteFilename, songId: song.SNG_ID }, 'downloading song');
     const temporaryFilename = temporaryPathFor(absoluteFilename);
     try {
-      // Deezer may fall back to a lower quality (e.g. MP3 when a track has
-      // no FLAC), so the final name uses the extension actually downloaded.
       const { extension } = await this.deezer.downloadSong(song, temporaryFilename);
       const finalFilename =
         extension === preferredExtension
@@ -208,8 +186,6 @@ export class DownloadService {
       throw error;
     }
   }
-
-  // --- YouTube and everything else yt-dlp understands --------------------------
 
   public async downloadYoutube(url: string, addToPlaylist: boolean): Promise<string[]> {
     const filename = await this.downloadWithYtDlp(url, this.config.downloads.youtubeDir);
@@ -261,12 +237,10 @@ export class DownloadService {
       throw new DownloadError(`No songs from playlist '${playlist.title}' could be downloaded`);
     }
 
-    // Two videos with the same title end up in the same file.
     const files = [...new Set(downloaded)];
     return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
   }
 
-  /** Downloads one playlist entry unless the manifest says its file is already there. */
   private async downloadPlaylistEntry(
     entry: YoutubePlaylistEntry,
     directory: string,
@@ -301,12 +275,6 @@ export class DownloadService {
     });
   }
 
-  // --- Shared steps ----------------------------------------------------------
-
-  /**
-   * Downloads the items one after another and returns the files of those that
-   * worked. A failing item is reported as a warning and does not stop the rest.
-   */
   private async downloadBatch<Item>(batch: Batch<Item>): Promise<string[]> {
     const { items, onProgress, onWarning } = batch;
     const files: string[] = [];
@@ -324,14 +292,12 @@ export class DownloadService {
     return files;
   }
 
-  /** Runs the steps that follow a multi-song download and returns what the task produced. */
   private async finishCollection(files: string[], options: CollectionOptions): Promise<string[]> {
     await this.updateMpd(files, options.addToPlaylist);
     const output = options.withPlaylistFile ? [...files, await this.createM3u8File(files)] : files;
     return options.createZip ? [await this.createZipFile(output)] : output;
   }
 
-  /** Writes `00 <folder>.m3u8` next to the songs, listing them in download order. */
   public async createM3u8File(files: string[]): Promise<string> {
     const first = files[0];
     if (!first) {
@@ -352,7 +318,6 @@ export class DownloadService {
     return m3u8Path;
   }
 
-  /** Packs the files into `<zips dir>/<folder>.zip`, named after the folder they are in. */
   public async createZipFile(files: string[]): Promise<string> {
     const first = files[0];
     if (!first) {

@@ -1,7 +1,3 @@
-/**
- * Shapes of the Deezer responses the client reads. Deezer documents none of
- * this, so every field is optional and checked before use.
- */
 import type { DeezerSong } from './types.js';
 
 export interface DeezerApiError {
@@ -10,10 +6,8 @@ export interface DeezerApiError {
   code?: number;
 }
 
-/** `deezer.getUserData` on the private gw-light API. */
 export interface UserDataResponse {
   results?: {
-    /** CSRF token for other gw-light calls. */
     checkForm?: string;
     USER?: {
       OPTIONS?: {
@@ -28,7 +22,6 @@ export interface UserDataResponse {
   };
 }
 
-/** `deezer.pagePlaylist` on the private gw-light API. */
 export interface PlaylistResponse {
   error?: unknown[];
   results?: {
@@ -43,23 +36,19 @@ export interface PlaylistResponse {
   };
 }
 
-/** `/user/{id}/tracks` on the public API. */
 export interface FavoritesResponse {
   data?: Array<{ id: number }>;
   total?: number;
-  /** URL of the next page, absent on the last one. */
   next?: string;
   error?: DeezerApiError | string;
 }
 
-/** `/search/{type}`, `/album/{id}` and `/artist/{id}/...` on the public API. */
 export interface SearchResponse {
   data?: unknown[];
   tracks?: { data?: unknown[] };
   error?: DeezerApiError | string;
 }
 
-/** `get_url` on the media API. */
 export interface MediaResponse {
   data?: Array<{
     errors?: Array<{ message?: string }>;

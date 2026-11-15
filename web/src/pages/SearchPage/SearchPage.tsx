@@ -22,22 +22,8 @@ import { SearchResults } from './SearchResults';
 
 import styles from './SearchPage.module.css';
 
-/** What the search field looks for; drill-downs into an album or artist use other search types. */
 type SearchMode = 'track' | 'album' | 'artist';
 
-const SEARCH_MODES: Array<{ value: SearchMode; label: string }> = [
-  { value: 'track', label: 'Tracks' },
-  { value: 'album', label: 'Albums' },
-  { value: 'artist', label: 'Artists' },
-];
-
-const PLACEHOLDERS: Record<SearchMode, string> = {
-  track: 'Search for a track…',
-  album: 'Search for an album…',
-  artist: 'Search for an artist…',
-};
-
-/** Deezer ids are positive integers; returns undefined for anything else. */
 function parseDeezerId(value: string | number): number | undefined {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : undefined;
@@ -49,20 +35,15 @@ export function SearchPage() {
   const [mode, setMode] = useState<SearchMode>('track');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultDto[]>([]);
-  /** Set while the tracklist of one album is shown in place of the results. */
   const [albumTracks, setAlbumTracks] = useState<AlbumTracks | null>(null);
   const [searching, setSearching] = useState(false);
-  /** True once a search has finished, so "no results" is not shown on a fresh page. */
   const [searched, setSearched] = useState(false);
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
-  // Incremented per search; responses from superseded searches are dropped
-  // so a slow earlier request cannot overwrite newer results.
   const latestSearch = useRef(0);
   const preview = usePreviewPlayer();
   const { busy: downloading, enqueue } = useEnqueue();
 
-  /** Runs a search and hands the results to `onFound`, unless a newer search has started meanwhile. */
   async function search(type: SearchType, searchQuery: string, onFound: (found: SearchResultDto[]) => void) {
     const searchId = ++latestSearch.current;
     const isLatest = () => searchId === latestSearch.current;
@@ -123,7 +104,6 @@ export function SearchPage() {
     });
   }
 
-  /** Lists what belongs to an artist: their top tracks or their albums. */
   function showArtist(type: 'artist_top' | 'artist_album', result: SearchResultDto) {
     setAlbumTracks(null);
     runSearch(type, result.id);
@@ -210,7 +190,16 @@ export function SearchPage() {
 
       <Panel as="form" onSubmit={onSubmit} className={styles.searchPanel}>
         <div className={styles.modeRow}>
-          <Segmented aria-label="Search type" value={mode} onValueChange={setMode} options={SEARCH_MODES} />
+          <Segmented
+            aria-label="Search type"
+            value={mode}
+            onValueChange={setMode}
+            options={[
+              { value: 'track', label: 'Tracks' },
+              { value: 'album', label: 'Albums' },
+              { value: 'artist', label: 'Artists' },
+            ]}
+          />
         </div>
         <div className={styles.searchRow}>
           <Input
@@ -221,7 +210,13 @@ export function SearchPage() {
             }}
             leading={<Search size={18} aria-hidden />}
             trailing={<kbd className={styles.kbd}>Ctrl M</kbd>}
-            placeholder={PLACEHOLDERS[mode]}
+            placeholder={
+              {
+                track: 'Search for a track…',
+                album: 'Search for an album…',
+                artist: 'Search for an artist…',
+              }[mode]
+            }
             aria-label="Search query"
             type="search"
             enterKeyHint="search"

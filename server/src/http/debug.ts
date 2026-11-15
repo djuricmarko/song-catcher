@@ -6,16 +6,7 @@ import type { AppConfig } from '../config/env.js';
 import { childStderr } from '../lib/child-process.js';
 import { errorMessage } from '../lib/errors.js';
 
-const execAsync = promisify(exec);
-
-const DEBUG_COMMAND_TIMEOUT_MS = 5_000;
-const DEBUG_COMMAND_MAX_BUFFER = 1024 * 1024;
-const TAIL_LINES = 100;
-/** Plenty for 100 log lines; avoids loading a large log file into memory. */
-const TAIL_BYTES = 64 * 1024;
-
-/** Returns the last `lines` lines of a file, reading at most `maxBytes` from its end. */
-export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL_BYTES): Promise<string> {
+export async function tailFile(file: string, lines = 100, maxBytes = 64 * 1024): Promise<string> {
   const handle = await open(file, 'r');
   try {
     const { size } = await handle.stat();
@@ -24,7 +15,6 @@ export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL
     await handle.read(buffer, 0, length, size - length);
     let text = buffer.toString('utf8');
     if (length < size) {
-      // Drop the first, probably partial, line.
       text = text.slice(text.indexOf('\n') + 1);
     }
     return text
@@ -39,9 +29,9 @@ export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL
 
 async function runDebugCommand(command: string): Promise<string> {
   try {
-    const { stdout, stderr } = await execAsync(command, {
-      timeout: DEBUG_COMMAND_TIMEOUT_MS,
-      maxBuffer: DEBUG_COMMAND_MAX_BUFFER,
+    const { stdout, stderr } = await promisify(exec)(command, {
+      timeout: 5_000,
+      maxBuffer: 1024 * 1024,
       encoding: 'utf8',
     });
     return `${stdout}${stderr}`;
@@ -50,11 +40,6 @@ async function runDebugCommand(command: string): Promise<string> {
   }
 }
 
-/**
- * The text shown on the Logs page: the output of the configured debug
- * command, else the tail of the log file. Never throws; problems are
- * reported as the text itself.
- */
 export async function getDebugOutput(config: AppConfig): Promise<string> {
   const { debugCommand, file } = config.logging;
 

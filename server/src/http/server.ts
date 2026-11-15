@@ -10,9 +10,6 @@ import { registerApiRoutes } from './routes.js';
 import { registerDownloads, registerWebApp, sendHtml } from './static.js';
 import type { ApiFastifyInstance, ApiServices } from './types.js';
 
-const NOT_FOUND: ApiErrorResponse = { error: 'not found' };
-
-/** Health and frontend configuration; the only routes that need no service. */
 function registerSystemRoutes(app: ApiFastifyInstance, config: AppConfig): void {
   const prefix = config.http.urlPrefix;
 
@@ -33,17 +30,12 @@ function registerSystemRoutes(app: ApiFastifyInstance, config: AppConfig): void 
   });
 
   if (prefix) {
-    // `/deezer` and `/deezer/` should both open the app; relative asset URLs need the slash.
     app.get(prefix, async (_request, reply) => {
       return reply.redirect(`${prefix}/`);
     });
   }
 }
 
-/**
- * Builds the HTTP server: the JSON API, the frontend and the downloaded files,
- * all below the configured URL prefix. The server is returned without listening.
- */
 export async function createServer(config: AppConfig, logger: Logger, services: ApiServices) {
   const app = Fastify({
     loggerInstance: logger,
@@ -57,7 +49,6 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
   });
 
   if (config.http.auth) {
-    // Health stays public so container health checks work without secrets.
     registerBasicAuth(app, config.http.auth, `${prefix}/api/health`);
   }
 
@@ -72,11 +63,10 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
     const isFileRequest = url.startsWith(`${prefix}/assets/`) || url.startsWith(`${prefix}/downloads/`);
     const isPageRequest = method === 'GET' || method === 'HEAD';
 
-    // Any other path is a client-side route of the frontend, e.g. `/queue`.
     if (indexPage && isPageRequest && !isApiRequest && !isFileRequest) {
       return sendHtml(reply, indexPage);
     }
-    return reply.code(404).send(NOT_FOUND);
+    return reply.code(404).send({ error: 'not found' } satisfies ApiErrorResponse);
   });
 
   return app;

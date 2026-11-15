@@ -5,7 +5,6 @@ import type { FileEntry, FilesResponse } from '@song-catcher/shared';
 
 import { isPathInside, toPosixPath } from '../lib/paths.js';
 
-/** A listing request that is refused; `statusCode` is the HTTP status to answer with. */
 export class FileAccessError extends Error {
   public constructor(
     message: string,
@@ -16,13 +15,6 @@ export class FileAccessError extends Error {
   }
 }
 
-/**
- * Lists one directory below `baseDirectory`. `requestedPath` is relative to
- * it and comes straight from the client, so it is checked twice: as written,
- * and again after resolving symlinks.
- *
- * Directories come first, then files, each sorted by name.
- */
 export async function listFiles(baseDirectory: string, requestedPath: string): Promise<FilesResponse> {
   if (requestedPath.includes('\0')) {
     throw new FileAccessError('invalid path', 400);
@@ -65,7 +57,6 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
 
   const directoryEntries = await readdir(target, { withFileTypes: true });
   for (const entry of directoryEntries) {
-    // Dotfiles are bookkeeping (e.g. the YouTube playlist manifest), not music.
     if (entry.name.startsWith('.')) {
       continue;
     }
@@ -76,9 +67,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
       const entryInfo = await stat(absolute);
       size = entryInfo.size;
       isDirectory = entryInfo.isDirectory();
-    } catch {
-      // Keep the Dirent information for broken symlinks.
-    }
+    } catch {}
     entries.push({
       name: entry.name,
       path: toPosixPath(path.relative(resolvedBase, absolute)),

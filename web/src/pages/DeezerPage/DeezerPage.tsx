@@ -69,7 +69,6 @@ export function DeezerPage() {
     </Button>
   );
 
-  // Both tabs offer the same options and share the choices made.
   const options = (
     <div className={styles.options}>
       {mpdEnabled ? (

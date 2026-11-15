@@ -1,21 +1,13 @@
 type PendingPicture = Promise<Buffer | undefined>;
 
-/**
- * Small LRU cache of album covers, keyed by picture id.
- *
- * It stores the in-flight promise rather than the finished buffer, so workers
- * that download songs of the same album at the same time share one request.
- */
 export class PictureCache {
   private readonly entries = new Map<string, PendingPicture>();
 
   public constructor(private readonly capacity: number) {}
 
-  /** Returns the cached picture, or starts `load` and caches its promise. */
   public get(pictureId: string, load: () => PendingPicture): PendingPicture {
     const cached = this.entries.get(pictureId);
     if (cached) {
-      // A Map iterates in insertion order; re-inserting marks the entry as recently used.
       this.entries.delete(pictureId);
       this.entries.set(pictureId, cached);
       return cached;

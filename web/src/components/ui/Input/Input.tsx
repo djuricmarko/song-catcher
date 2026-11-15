@@ -7,9 +7,7 @@ import styles from './Input.module.css';
 
 export interface InputProps extends Omit<ComponentPropsWithoutRef<typeof BaseInput>, 'className' | 'size'> {
   className?: string;
-  /** Optional leading adornment, usually an icon. */
   leading?: ReactNode;
-  /** Optional trailing adornment, e.g. a keyboard hint. */
   trailing?: ReactNode;
   size?: 'md' | 'lg';
 }

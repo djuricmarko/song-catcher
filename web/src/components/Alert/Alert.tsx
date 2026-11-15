@@ -10,7 +10,6 @@ interface AlertProps {
   children: ReactNode;
 }
 
-/** Inline error banner. */
 export function Alert({ className, children }: AlertProps) {
   return (
     <div role="alert" className={cn(styles.alert, className)}>

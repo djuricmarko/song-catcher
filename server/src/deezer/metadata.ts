@@ -9,15 +9,8 @@ import NodeID3 from 'node-id3';
 import { childEnvironment, childStderr } from '../lib/child-process.js';
 import type { DeezerSong } from './types.js';
 
-const execFileAsync = promisify(execFile);
-
-const METAFLAC_MAX_BUFFER = 1024 * 1024;
-/** ID3 picture type 3, the front cover. */
-const ID3_FRONT_COVER = { id: 3, name: 'front cover' };
-
 export interface MetadataOptions {
   isFlac: boolean;
-  /** Front cover; omitted when it could not be downloaded. */
   picture?: Buffer;
   metaflacPath: string;
 }
@@ -29,7 +22,6 @@ export class MetadataError extends Error {
   }
 }
 
-/** The tags written to every file, in the vocabulary shared by ID3 and Vorbis comments. */
 interface SongTags {
   artist: string | undefined;
   title: string | undefined;
@@ -64,7 +56,6 @@ function songTags(song: DeezerSong): SongTags {
   };
 }
 
-/** Writes title, artist, album, numbering, year and cover into a downloaded song. */
 export async function writeSongMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
   const tags = songTags(song);
   if (options.isFlac) {
@@ -87,7 +78,7 @@ async function writeMp3Metadata(outputFile: string, songTags: SongTags, options:
       ? {
           image: {
             mime: 'image/jpeg',
-            type: ID3_FRONT_COVER,
+            type: { id: 3 },
             description: 'Cover',
             imageBuffer: options.picture,
           },
@@ -111,7 +102,6 @@ async function writeMp3Metadata(outputFile: string, songTags: SongTags, options:
 }
 
 async function writeFlacMetadata(outputFile: string, songTags: SongTags, options: MetadataOptions): Promise<void> {
-  // metaflac can only import a cover from a file.
   const temporaryDirectory = options.picture ? await mkdtemp(path.join(tmpdir(), 'deezer-cover-')) : undefined;
 
   try {
@@ -139,8 +129,8 @@ async function writeFlacMetadata(outputFile: string, songTags: SongTags, options
     args.push(outputFile);
 
     try {
-      await execFileAsync(options.metaflacPath, args, {
-        maxBuffer: METAFLAC_MAX_BUFFER,
+      await promisify(execFile)(options.metaflacPath, args, {
+        maxBuffer: 1024 * 1024,
         env: childEnvironment(),
       });
     } catch (error) {

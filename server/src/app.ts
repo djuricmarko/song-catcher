@@ -8,12 +8,6 @@ import { registerDownloadHandlers } from './queue/handlers.js';
 import { Scheduler } from './queue/scheduler.js';
 import type { DownloadScheduler, DownloadTasks } from './queue/tasks.js';
 
-/**
- * How long shutdown waits for running downloads. Kept below Docker's default
- * 10 s stop timeout so the process exits cleanly instead of being SIGKILLed.
- */
-const SHUTDOWN_GRACE_MS = 8_000;
-
 export interface BuiltApp {
   app: Awaited<ReturnType<typeof createServer>>;
   deezer: DeezerClient;
@@ -21,10 +15,6 @@ export interface BuiltApp {
   downloads: DownloadService;
 }
 
-/**
- * The composition root: creates every service, wires them together and
- * returns the HTTP server, ready to listen. Logs in to Deezer on the way.
- */
 export async function buildApp(config: AppConfig, logger: Logger): Promise<BuiltApp> {
   const deezer = new DeezerClient(config, logger);
   await deezer.init();
@@ -40,7 +30,8 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
 
   const app = await createServer(config, logger, { deezer, scheduler, downloads });
   app.addHook('onClose', async () => {
-    await scheduler.stop(SHUTDOWN_GRACE_MS);
+    // Below Docker's default 10 s stop timeout, so the process exits cleanly instead of being SIGKILLed.
+    await scheduler.stop(8_000);
   });
 
   return { app, deezer, scheduler, downloads };

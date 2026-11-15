@@ -6,16 +6,10 @@ import type { TaskAcceptedResponse } from '@song-catcher/shared';
 import { errorMessage } from '../lib/errors';
 
 interface EnqueueOptions {
-  /** Title of the toast shown once the download is queued. */
   successMessage: string;
-  /** Runs after the success toast, typically to clear the form. */
   onQueued?: () => void;
 }
 
-/**
- * Sends a "start this download" request and reports the outcome as a toast.
- * `busy` is true while a request is on its way, to disable the submit button.
- */
 export function useEnqueue() {
   const [busy, setBusy] = useState(false);
 

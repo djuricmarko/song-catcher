@@ -9,20 +9,10 @@ import { Blowfish } from 'egoroof-blowfish';
  * encrypted block to the next.
  */
 export const BLOCK_SIZE = 2048;
-const ENCRYPTED_BLOCK_INTERVAL = 3;
 export const BLOWFISH_IV = Buffer.from('0001020304050607', 'hex');
-const BLOWFISH_SECRET = 'g4el58wc0zvf9na1';
-
-/**
- * Blowfish key derivation used by Deezer:
- *
- *   key[i] = md5hex(songId)[i] ^ md5hex(songId)[i + 16] ^ "g4el58wc0zvf9na1"[i]
- *
- * All operands are ASCII bytes, so the result is a 16-byte key.
- */
 export function calcBfKey(songId: string): Buffer {
   const md5hex = createHash('md5').update(songId).digest('hex');
-  const secret = Buffer.from(BLOWFISH_SECRET, 'ascii');
+  const secret = Buffer.from('g4el58wc0zvf9na1', 'ascii');
   const key = Buffer.alloc(16);
 
   for (let index = 0; index < 16; index += 1) {
@@ -42,19 +32,12 @@ function nativeBlowfishAvailable(): boolean {
     decipher.update(Buffer.alloc(8));
     return true;
   } catch {
-    // Node/OpenSSL 3 without --openssl-legacy-provider does not provide bf-cbc.
     return false;
   }
 }
 
-const USE_NATIVE_BLOWFISH = nativeBlowfishAvailable();
-
-/**
- * Returns a function that decrypts 2048-byte blocks with the given key. The
- * pure-JS fallback is built once per key because its key schedule is costly.
- */
 export function createBlockDecryptor(key: Buffer): (block: Buffer) => Buffer {
-  if (USE_NATIVE_BLOWFISH) {
+  if (nativeBlowfishAvailable()) {
     return (block) => {
       const decipher = createDecipheriv('bf-cbc', key, BLOWFISH_IV);
       decipher.setAutoPadding(false);
@@ -75,16 +58,10 @@ export function createBlockDecryptor(key: Buffer): (block: Buffer) => Buffer {
   };
 }
 
-/** Decrypts a single block. Use `createBlockDecryptor` when decrypting many with the same key. */
 export function decryptBlock(block: Buffer, key: Buffer): Buffer {
   return createBlockDecryptor(key)(block);
 }
 
-/**
- * Streaming decryptor. Full 2048-byte blocks are decrypted only when their
- * zero-based index is divisible by three; everything else is passed through.
- * A short trailing block is always copied as-is, matching Deezer's format.
- */
 export function createDecryptTransform(key: Buffer): Transform {
   let remainder = Buffer.alloc(0);
   let blockIndex = 0;
@@ -98,7 +75,7 @@ export function createDecryptTransform(key: Buffer): Transform {
       while (remainder.length >= BLOCK_SIZE) {
         const block = remainder.subarray(0, BLOCK_SIZE);
         remainder = remainder.subarray(BLOCK_SIZE);
-        const isEncrypted = blockIndex % ENCRYPTED_BLOCK_INTERVAL === 0;
+        const isEncrypted = blockIndex % 3 === 0;
         output.push(isEncrypted ? decrypt(block) : block);
         blockIndex += 1;
       }

@@ -7,15 +7,9 @@ import { isAbortError } from '../lib/errors';
 
 export type PreviewPlayer = ReturnType<typeof usePreviewPlayer>;
 
-/**
- * Plays 30-second track previews, one at a time, through a single audio
- * element that is created on first use and stopped when the page unmounts.
- */
 export function usePreviewPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  // Bumped on every play/pause so a late play() rejection for a preview the
-  // user has already paused or replaced is ignored.
   const attemptRef = useRef(0);
 
   useEffect(() => {
@@ -35,7 +29,6 @@ export function usePreviewPlayer() {
     return audioRef.current;
   }
 
-  /** Starts the preview at `url`, or pauses it when it is the one playing. */
   function toggle(url: string): void {
     if (!url) {
       return;
@@ -77,12 +70,10 @@ export function usePreviewPlayer() {
     });
   }
 
-  /** Toggles the preview of a search result; results without one are ignored. */
   function toggleResult(result: SearchResultDto): void {
     toggle(result.preview_url);
   }
 
-  /** True when `url` is the preview currently playing. */
   function isPlaying(url: string): boolean {
     return playingUrl !== null && playingUrl === url;
   }

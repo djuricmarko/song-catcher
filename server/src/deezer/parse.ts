@@ -6,8 +6,6 @@ import type { DeezerAppState, SearchResult, SearchType } from './types.js';
 const UNKNOWN_API_ERROR = 'unknown Deezer API error';
 const APP_STATE_START = '{"DATA":';
 
-// The public API omits fields depending on the endpoint (e.g. album tracks
-// may lack `album`), so treat everything as optional.
 interface DeezerApiTrack {
   id?: number;
   title?: string;
@@ -29,7 +27,6 @@ interface DeezerApiArtist {
   picture_small?: string;
 }
 
-/** Describes the `error` field of a public API response. */
 export function apiErrorText(error: DeezerApiError | string | undefined): string {
   if (!error) {
     return UNKNOWN_API_ERROR;
@@ -40,10 +37,6 @@ export function apiErrorText(error: DeezerApiError | string | undefined): string
   return error.message ?? error.type ?? UNKNOWN_API_ERROR;
 }
 
-/**
- * Returns the balanced JSON object starting at `start` (which must be `{`),
- * honouring strings and escapes, or undefined if it never closes.
- */
 function balancedObject(text: string, start: number): string | undefined {
   let depth = 0;
   let inString = false;
@@ -69,12 +62,6 @@ function balancedObject(text: string, start: number): string | undefined {
   return undefined;
 }
 
-/**
- * Deezer embeds the page state in an inline script, typically as
- * `window.__DZR_APP_STATE__ = {"DATA":...};` possibly followed by more code.
- * Extracts just the balanced object after each `{"DATA":` and ignores
- * candidates that fail to parse.
- */
 export function extractAppState(html: string): DeezerAppState | undefined {
   const $ = load(html);
   const scripts = $('script')
@@ -103,29 +90,21 @@ function parseAppState(candidate: string | undefined): DeezerAppState | undefine
     const state = JSON.parse(candidate) as DeezerAppState;
     return state.DATA ? state : undefined;
   } catch {
-    // Not valid JSON; the caller tries the next occurrence.
     return undefined;
   }
 }
 
-/** Accepts a playlist URL (anything containing `/playlist/<id>`) or a bare numeric id. */
 export function extractPlaylistId(value: string): string | undefined {
   const match = /\/playlist\/(\d+)/.exec(value) ?? /^(\d+)$/.exec(value);
   return match?.[1];
 }
 
-/** Album context used to fill in tracks that come without an `album` object. */
 export interface AlbumContext {
   id?: number;
   title?: string;
   cover_small?: string;
 }
 
-/**
- * Converts one item of a public API response into the shape the frontend
- * renders. The kind of item is implied by the search type; returns undefined
- * for anything that is not an object with an id.
- */
 export function mapSearchResult(
   item: unknown,
   searchType: SearchType,

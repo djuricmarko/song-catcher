@@ -29,7 +29,6 @@ describe('fileExtension', () => {
   });
 
   it('returns the whole name when there is no dot', () => {
-    // Matches no known extension, which is all callers need.
     expect(fileExtension('README')).toBe('readme');
     expect(fileExtension('')).toBe('');
   });

@@ -20,17 +20,14 @@ import styles from './App.module.css';
 interface NavItem {
   to: string;
   label: string;
-  /** Label for the bottom tab bar on phones; omitted items live in the top bar instead. */
   tabLabel?: string;
   icon: LucideIcon;
-  /** Match the path exactly, so "/" is not active on every page. */
   end?: boolean;
 }
 
 const QUEUE_PATH = '/queue';
 const LOGS_PATH = '/debug';
 
-/** In sidebar order, which is also the order of the Ctrl+Shift+<n> shortcuts. */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Search', tabLabel: 'Search', icon: Search, end: true },
   { to: '/youtube', label: 'Video links', tabLabel: 'Links', icon: Video },
@@ -40,12 +37,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: QUEUE_PATH, label: 'Queue', tabLabel: 'Queue', icon: ListTodo },
 ];
 
-const TAB_ITEMS = NAV_ITEMS.filter((item) => item.tabLabel);
 const NAV_PATHS = NAV_ITEMS.map((item) => item.to);
-/** The tab badge has room for two digits. */
-const MAX_BADGE_COUNT = 99;
 
-/** Logo and app name. With a `version` it becomes the two-line variant used in the sidebar. */
 function Brand({ logoSize, version }: { logoSize: number; version?: string }) {
   const appName = (
     <p className={styles.appName}>
@@ -70,7 +63,6 @@ function Brand({ logoSize, version }: { logoSize: number; version?: string }) {
   );
 }
 
-/** Desktop navigation. */
 function Sidebar({ pendingTasks }: { pendingTasks: number }) {
   const config = useAppConfig();
 
@@ -112,7 +104,6 @@ function Sidebar({ pendingTasks }: { pendingTasks: number }) {
   );
 }
 
-/** Phone header: the brand plus what has no room in the tab bar. */
 function TopBar() {
   return (
     <header className={styles.topbar}>
@@ -131,17 +122,16 @@ function TopBar() {
   );
 }
 
-/** Phone navigation along the bottom edge. */
 function TabBar({ pendingTasks }: { pendingTasks: number }) {
   return (
     <nav className={styles.tabbar} aria-label="Primary">
-      {TAB_ITEMS.map(({ to, tabLabel, icon: Icon, end }) => (
+      {NAV_ITEMS.filter((item) => item.tabLabel).map(({ to, tabLabel, icon: Icon, end }) => (
         <NavLink key={to} to={to} end={end} className={({ isActive }) => cn(styles.tab, isActive && styles.tabActive)}>
           <span className={styles.tabIcon}>
             <Icon size={20} strokeWidth={1.75} aria-hidden />
             {to === QUEUE_PATH && pendingTasks > 0 ? (
               <span className={styles.tabBadge} aria-label={`${pendingTasks} in progress`}>
-                {pendingTasks > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : pendingTasks}
+                {pendingTasks > 99 ? '99+' : pendingTasks}
               </span>
             ) : null}
           </span>
@@ -152,10 +142,6 @@ function TabBar({ pendingTasks }: { pendingTasks: number }) {
   );
 }
 
-/**
- * The app shell. CSS shows either the sidebar (wide screens) or the top bar
- * and tab bar (phones); all three are always rendered.
- */
 export default function App() {
   const { pathname } = useLocation();
   const { tasks } = useQueue();
@@ -163,7 +149,6 @@ export default function App() {
 
   useKeyboardShortcuts(NAV_PATHS);
 
-  // Each page starts at the top, like switching tabs in a native app.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);

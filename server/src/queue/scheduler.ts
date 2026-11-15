@@ -1,41 +1,26 @@
-import type { QueueTask, TaskState } from '@song-catcher/shared';
+import type { QueueTask } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
 import { errorMessage } from '../lib/errors.js';
 
-/** What a running task can tell the queue about itself. */
 export interface TaskContext {
   reportProgress: (current: number, maximum: number) => void;
-  /** Records a non-fatal problem; the task can still succeed. */
   reportWarning: (message: string) => void;
 }
 
 export type TaskArgs = Record<string, unknown>;
 
-/** Maps handler names to the argument shape each handler receives. */
 export type TaskArgsMap = Record<string, TaskArgs>;
 
-/** Carries out one kind of task and resolves to the files it produced. */
 export type TaskHandler<Args extends TaskArgs = TaskArgs> = (args: Args, context: TaskContext) => Promise<string[]>;
 
 export type TaskListener = (task: QueueTask) => void;
 export type TaskRemovedListener = (taskId: number) => void;
 
-/** A task as the scheduler keeps it; clients only ever see copies without the handler name. */
 interface InternalTask extends QueueTask {
   handlerName: string;
 }
 
-const FINISHED_STATES: readonly TaskState[] = ['mission accomplished', 'failed'];
-
-/**
- * In-memory worker pool with a bounded history of processed tasks. It mirrors
- * the semantics of the old Python ThreadpoolScheduler while using async tasks.
- *
- * Tasks run in the order they were enqueued, at most `workerCount` at a time.
- * `Tasks` ties each handler name to its argument type, so `register` and
- * `enqueue` are checked against each other at compile time.
- */
 export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
   private readonly tasks: InternalTask[] = [];
   private readonly handlers = new Map<string, TaskHandler>();
@@ -52,16 +37,13 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     private readonly logger: Logger,
   ) {}
 
-  /** Declares how tasks named `handlerName` are carried out. Each name can be registered once. */
   public register<Name extends keyof Tasks & string>(handlerName: Name, handler: TaskHandler<Tasks[Name]>): void {
     if (this.handlers.has(handlerName)) {
       throw new Error(`Task handler already registered: ${handlerName}`);
     }
-    // Safe: enqueue() only accepts Tasks[Name] for this name.
     this.handlers.set(handlerName, handler as TaskHandler);
   }
 
-  /** Starts the workers. Calling it again has no effect. */
   public start(): void {
     if (this.workers.length > 0) {
       return;
@@ -72,11 +54,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.logger.info({ workers: this.workerCount }, 'download workers started');
   }
 
-  /**
-   * Stops accepting work and waits for running tasks. With `graceMs`, gives
-   * up waiting after that long so shutdown cannot hang on a stuck download;
-   * abandoned tasks are logged and simply die with the process.
-   */
   public async stop(graceMs = Number.POSITIVE_INFINITY): Promise<void> {
     if (!this.stopRequested) {
       this.stopRequested = true;
@@ -111,7 +88,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.logger.info('download workers stopped');
   }
 
-  /** Adds a task to the end of the queue and returns a snapshot of it. */
   public enqueue<Name extends keyof Tasks & string>(
     description: string,
     handlerName: Name,
@@ -146,15 +122,10 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     return this.snapshot(task);
   }
 
-  /** Snapshots of every task that is waiting, running or still in the history, oldest first. */
   public getTasks(): QueueTask[] {
     return this.tasks.map((task) => this.snapshot(task));
   }
 
-  /**
-   * Subscribes to task updates and, optionally, to tasks being dropped from
-   * the bounded history so clients can prune their copy.
-   */
   public subscribe(listener: TaskListener, onRemoved?: TaskRemovedListener): () => void {
     this.listeners.add(listener);
     if (onRemoved) {
@@ -231,10 +202,9 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     }
   }
 
-  /** Drops the oldest finished tasks until the list fits the history limit. Unfinished tasks always stay. */
   private trimHistory(): void {
     while (this.tasks.length > this.historyLimit) {
-      const index = this.tasks.findIndex((task) => FINISHED_STATES.includes(task.state));
+      const index = this.tasks.findIndex((task) => task.state === 'mission accomplished' || task.state === 'failed');
       if (index === -1) {
         return;
       }
@@ -249,7 +219,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.emit(this.listeners, this.snapshot(task));
   }
 
-  /** Calls every listener; one that throws must not stop the others or the worker. */
   private emit<Payload>(listeners: ReadonlySet<(payload: Payload) => void>, payload: Payload): void {
     for (const listener of listeners) {
       try {
@@ -260,7 +229,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     }
   }
 
-  /** A copy that is safe to hand out: later changes to the task do not show through. */
   private snapshot(task: InternalTask): QueueTask {
     return {
       id: task.id,

@@ -16,15 +16,12 @@ import { playlistLinkKind } from '../../lib/playlistUrl';
 
 import styles from './YoutubePage.module.css';
 
-const SOURCES = ['YouTube', 'SoundCloud', 'Vimeo', 'Bandcamp', 'Invidious', 'Mixcloud'];
-
 export function YoutubePage() {
   const appConfig = useAppConfig();
   const mpdEnabled = appConfig.data?.useMpd ?? false;
   const [url, setUrl] = useState('');
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
-  // Only meaningful for a video opened from a playlist; a playlist page is always downloaded whole.
   const [entirePlaylist, setEntirePlaylist] = useState(false);
   const { busy, enqueue } = useEnqueue();
 
@@ -32,7 +29,6 @@ export function YoutubePage() {
   const playlistMode = linkKind === 'playlist' || (linkKind === 'video' && entirePlaylist);
 
   function changeUrl(next: string) {
-    // The choice belongs to one link; a different playlist starts from the default again.
     if (playlistLinkKind(next) !== 'video') {
       setEntirePlaylist(false);
     }
@@ -124,7 +120,7 @@ export function YoutubePage() {
       <div className={styles.sources}>
         <span className={styles.sourcesLabel}>Works with</span>
         <ul className={styles.sourceList}>
-          {SOURCES.map((source) => (
+          {['YouTube', 'SoundCloud', 'Vimeo', 'Bandcamp', 'Invidious', 'Mixcloud'].map((source) => (
             <li key={source}>{source}</li>
           ))}
           <li className={styles.more}>and many more</li>

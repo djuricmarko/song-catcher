@@ -123,7 +123,6 @@ describe('API error handling', () => {
   });
 
   it('answers a task that cannot be enqueued with a 500', async () => {
-    // No handler is registered for this scheduler, so enqueue() throws.
     const response = await app.inject({
       method: 'POST',
       url: '/api/youtubedl',

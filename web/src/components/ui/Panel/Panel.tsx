@@ -11,7 +11,6 @@ interface PanelProps {
   onSubmit?: SubmitEventHandler<HTMLFormElement>;
 }
 
-/** A bordered surface. Deliberately flat; depth comes from the border and paper tone. */
 export function Panel({ as = 'div', className, children, onSubmit }: PanelProps) {
   if (as === 'form') {
     return (

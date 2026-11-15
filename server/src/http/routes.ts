@@ -18,16 +18,11 @@ import {
 } from './schemas.js';
 import type { ApiFastifyInstance, ApiServices } from './types.js';
 
-/** Downloads run in the background; the client follows the task through the queue. */
 function accepted(reply: FastifyReply, task: QueueTask): FastifyReply {
   const body: TaskAcceptedResponse = { task_id: task.id };
   return reply.code(202).send(body);
 }
 
-/**
- * Registers the JSON API under `<prefix>/api`. Handlers only validate and
- * delegate; failures are thrown and answered by the server's error handler.
- */
 export function registerApiRoutes(app: ApiFastifyInstance, config: AppConfig, services: ApiServices): void {
   const api = `${config.http.urlPrefix}/api`;
   const { deezer, scheduler } = services;

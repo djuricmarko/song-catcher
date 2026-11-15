@@ -7,7 +7,6 @@ interface EmptyStateProps {
   children?: ReactNode;
 }
 
-/** Empty placeholder drawn as a blank cassette label. */
 export function EmptyState({ title, children }: EmptyStateProps) {
   return (
     <div className={styles.empty}>

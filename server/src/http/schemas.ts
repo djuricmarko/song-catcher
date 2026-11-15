@@ -11,11 +11,6 @@ import { z, type ZodType } from 'zod';
 import { SEARCH_TYPES } from '../deezer/types.js';
 import { ApiValidationError } from './errors.js';
 
-/**
- * Request schemas. `satisfies ZodType<...>` ties each one to the request type
- * the frontend uses, so the two cannot drift apart unnoticed.
- */
-
 const httpUrl = z
   .string()
   .trim()
@@ -73,7 +68,6 @@ export const filesQuerySchema = z.object({
   path: z.string().optional(),
 });
 
-/** Validates a request body or query string, throwing an ApiValidationError that lists every problem. */
 export function parseRequest<T>(schema: ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
   if (!result.success) {

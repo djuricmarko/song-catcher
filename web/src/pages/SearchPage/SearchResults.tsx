@@ -7,7 +7,6 @@ import styles from './SearchPage.module.css';
 
 interface SearchResultsProps {
   results: SearchResultDto[];
-  /** Disables every action while a search or download request is running. */
   busy: boolean;
   preview: PreviewPlayer;
   onDownloadTrack: (result: SearchResultDto) => void;
@@ -17,9 +16,7 @@ interface SearchResultsProps {
   onArtistAlbums: (result: SearchResultDto) => void;
 }
 
-/** What a search found: tracks as a list, albums and artists as a grid of tiles. */
 export function SearchResults({ results, busy, preview, ...actions }: SearchResultsProps) {
-  // A search returns one kind of result, so the first one tells the layout.
   const showsTiles = results[0]?.id_type !== 'track';
 
   return (

@@ -2,7 +2,6 @@ import type { SearchResultDto, SearchType } from '@song-catcher/shared';
 
 export type { SearchType } from '@song-catcher/shared';
 
-/** Every search type, for validating requests at runtime. */
 export const SEARCH_TYPES = [
   'track',
   'album',
@@ -12,10 +11,8 @@ export const SEARCH_TYPES = [
   'artist_top',
 ] as const satisfies readonly SearchType[];
 
-/** The kinds of deezer.com pages the client can read songs from. */
 export type WebsiteType = 'track' | 'album' | 'playlist';
 
-/** A song as Deezer's website and private API describe it. */
 export interface DeezerSong {
   SNG_ID: string;
   SNG_TITLE: string;
@@ -29,7 +26,6 @@ export interface DeezerSong {
   PHYSICAL_RELEASE_DATE?: string;
   TRACK_TOKEN: string;
   MD5_ORIGIN: string;
-  /** Alternative recording to use when this one cannot be streamed. */
   FALLBACK?: DeezerSong;
   [key: string]: unknown;
 }
@@ -42,7 +38,6 @@ export interface DeezerPageData {
   [key: string]: unknown;
 }
 
-/** The state object deezer.com embeds in its track, album and playlist pages. */
 export interface DeezerAppState {
   DATA?: DeezerPageData;
   SONGS?: {

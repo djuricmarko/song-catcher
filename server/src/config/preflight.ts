@@ -7,24 +7,18 @@ import type { AppConfig } from './env.js';
 
 export type ToolName = 'ytDlp' | 'ffmpeg' | 'metaflac';
 
-/** What `checkEnvironment` found. Errors must stop the server; warnings only limit what it can do. */
 export interface EnvironmentReport {
   errors: string[];
   warnings: string[];
-  /** The resolved executable of each external tool, or undefined when it is missing. */
   tools: Record<ToolName, string | undefined>;
-  /** The download directories that were created or found. */
   directories: string[];
 }
 
 interface ToolRequirement {
   tool: ToolName;
-  /** The environment variable that configures it, for the message. */
   variable: string;
   command: string;
-  /** A missing required tool is an error; a missing optional one a warning. */
   required: boolean;
-  /** What stops working without the tool. */
   consequence: string;
 }
 
@@ -32,10 +26,6 @@ export function isLoopbackHost(host: string): boolean {
   return host === 'localhost' || host === '::1' || host.startsWith('127.');
 }
 
-/**
- * Finds an executable the way a shell would: a path is used as it is, a bare
- * name is searched on PATH. Returns undefined when nothing executable is found.
- */
 export function resolveExecutable(command: string, envPath: string = process.env.PATH ?? ''): string | undefined {
   const trimmed = command.trim();
   if (!trimmed) {
@@ -54,16 +44,12 @@ export function resolveExecutable(command: string, envPath: string = process.env
     try {
       accessSync(candidate, fsConstants.X_OK);
       return candidate;
-    } catch {
-      // Try the next PATH entry.
-    }
+    } catch {}
   }
   return undefined;
 }
 
 function toolRequirements(config: AppConfig): ToolRequirement[] {
-  // Only metaflac is essential, and only for FLAC; the others merely disable
-  // YouTube downloads, so they should not stop the server from starting.
   return [
     {
       tool: 'ytDlp',
@@ -89,11 +75,6 @@ function toolRequirements(config: AppConfig): ToolRequirement[] {
   ];
 }
 
-/**
- * Filesystem and executable checks performed at startup and by `--check`:
- * finds the external tools, creates the download directories and warns about
- * an unprotected public listen address.
- */
 export async function checkEnvironment(config: AppConfig): Promise<EnvironmentReport> {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -114,7 +95,6 @@ export async function checkEnvironment(config: AppConfig): Promise<EnvironmentRe
     }
   }
 
-  // Overrides may point several settings at the same directory.
   const directories = [...new Set(Object.values(config.downloads))];
   for (const directory of directories) {
     try {

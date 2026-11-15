@@ -16,9 +16,7 @@ export interface AlbumTracks {
 
 interface AlbumTracklistProps {
   album: AlbumTracks;
-  /** Disables the per-track buttons while a search or download request is running. */
   busy: boolean;
-  /** Disables the album button while a download request is running. */
   downloading: boolean;
   preview: PreviewPlayer;
   onBack: () => void;
@@ -26,7 +24,6 @@ interface AlbumTracklistProps {
   onDownloadTrack: (track: SearchResultDto) => void;
 }
 
-/** The songs of one album, opened from an album tile in the search results. */
 export function AlbumTracklist({
   album,
   busy,

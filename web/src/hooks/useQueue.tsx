@@ -6,27 +6,21 @@ import { API_ROOT, getQueue } from '../api/client';
 import { errorMessage } from '../lib/errors';
 
 interface QueueState {
-  /** Every task the server knows about, oldest first. */
   tasks: QueueTask[];
-  /** False while the event stream is (re)connecting; `tasks` may then be stale. */
   connected: boolean;
-  /** Why the initial load failed, if it did and the stream has not delivered since. */
   error: string | null;
 }
 
 const QueueContext = createContext<QueueState | null>(null);
 
-/** The payload of a server-sent event, or undefined when it is malformed. */
 function parseEventData(event: MessageEvent<string>): unknown {
   try {
     return JSON.parse(event.data);
   } catch {
-    // Ignore malformed events and wait for the next one.
     return undefined;
   }
 }
 
-/** Replaces the task with the same id, or appends it when it is new. */
 function upsertTask(tasks: QueueTask[], task: QueueTask): QueueTask[] {
   const index = tasks.findIndex((candidate) => candidate.id === task.id);
   if (index === -1) {
@@ -37,7 +31,6 @@ function upsertTask(tasks: QueueTask[], task: QueueTask): QueueTask[] {
   return next;
 }
 
-/** Keeps a live copy of the server's queue: one fetch to start with, then the event stream. */
 function useQueueStream(): QueueState {
   const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [connected, setConnected] = useState(false);
@@ -45,8 +38,6 @@ function useQueueStream(): QueueState {
 
   useEffect(() => {
     let active = true;
-    // The SSE snapshot is authoritative; the initial fetch is only a fallback
-    // for when the stream is slow to connect and must not overwrite newer data.
     let streamed = false;
 
     void getQueue()
@@ -64,7 +55,6 @@ function useQueueStream(): QueueState {
 
     const source = new EventSource(`${API_ROOT}/queue/events`);
 
-    // The whole queue, sent once when the stream (re)connects.
     const onSnapshot = (event: MessageEvent<string>) => {
       streamed = true;
       const snapshot = parseEventData(event) as QueueTask[] | undefined;
@@ -74,7 +64,6 @@ function useQueueStream(): QueueState {
       }
     };
 
-    // One task that was added or changed.
     const onTask = (event: MessageEvent<string>) => {
       streamed = true;
       const task = parseEventData(event) as QueueTask | undefined;
@@ -83,7 +72,6 @@ function useQueueStream(): QueueState {
       }
     };
 
-    // A finished task that dropped out of the server's bounded history.
     const onRemoved = (event: MessageEvent<string>) => {
       const removed = parseEventData(event) as { id: number } | undefined;
       if (removed) {
@@ -113,10 +101,6 @@ function useQueueStream(): QueueState {
   return { tasks, connected, error };
 }
 
-/**
- * Holds one queue event stream for the whole app, so the navigation badge
- * and the queue page share it and switching pages never reconnects.
- */
 export function QueueProvider({ children }: { children: ReactNode }) {
   const state = useQueueStream();
   return <QueueContext.Provider value={state}>{children}</QueueContext.Provider>;

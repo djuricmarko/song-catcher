@@ -21,7 +21,6 @@ interface SearchResultCardProps {
   onArtistAlbums?: (result: SearchResultDto) => void;
 }
 
-/** Animated bars shown in place of the track number while its preview plays. */
 function Equalizer() {
   return (
     <span className={styles.eq} aria-hidden>
@@ -32,7 +31,6 @@ function Equalizer() {
   );
 }
 
-/** One search result: a row for a track, a tile for an album or artist. */
 export function SearchResultCard(props: SearchResultCardProps) {
   const { result } = props;
   if (result.id_type === 'track') {

@@ -19,7 +19,6 @@ function printConfig(config: AppConfig): void {
   console.log(JSON.stringify(redactConfig(config), null, 2));
 }
 
-/** Prints what the environment check found. Returns false when the server cannot run. */
 function reportEnvironment(report: EnvironmentReport): boolean {
   for (const warning of report.warnings) {
     console.warn(`warning: ${warning}`);
@@ -30,7 +29,6 @@ function reportEnvironment(report: EnvironmentReport): boolean {
   return report.errors.length === 0;
 }
 
-/** `--check`: shows the resolved tools and tries a real Deezer login. Returns false when the login fails. */
 async function checkDeezerLogin(config: AppConfig, report: EnvironmentReport): Promise<boolean> {
   console.log('Configuration OK');
   for (const [name, executable] of Object.entries(report.tools)) {
@@ -85,7 +83,6 @@ const program = new Command()
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof ConfigError) {
-    // The message already lists every problem; a stack trace would only bury it.
     console.error(error.message);
   } else if (error instanceof Error) {
     console.error(error.stack ?? error.message);

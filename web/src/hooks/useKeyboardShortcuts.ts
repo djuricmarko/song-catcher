@@ -1,19 +1,13 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const SEARCH_INPUT_SELECTOR = 'input[aria-label="Search query"]';
-
-/**
- * App-wide shortcuts: Ctrl+M focuses the search field, and Ctrl+Shift+<n>
- * opens the n-th page of `paths`.
- */
 export function useKeyboardShortcuts(paths: readonly string[]): void {
   const navigate = useNavigate();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'm') {
-        const input = document.querySelector<HTMLInputElement>(SEARCH_INPUT_SELECTOR);
+        const input = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]');
         if (input) {
           event.preventDefault();
           input.focus();
