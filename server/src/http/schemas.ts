@@ -19,7 +19,7 @@ import { ApiValidationError } from './errors.js';
 const httpUrl = z
   .string()
   .trim()
-  .url()
+  .pipe(z.url())
   .refine((value) => value.startsWith('http'), 'must start with http');
 
 export const searchSchema = z

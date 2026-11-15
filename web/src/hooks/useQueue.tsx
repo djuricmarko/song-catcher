@@ -17,9 +17,9 @@ interface QueueState {
 const QueueContext = createContext<QueueState | null>(null);
 
 /** The payload of a server-sent event, or undefined when it is malformed. */
-function parseEventData<T>(event: MessageEvent<string>): T | undefined {
+function parseEventData(event: MessageEvent<string>): unknown {
   try {
-    return JSON.parse(event.data) as T;
+    return JSON.parse(event.data);
   } catch {
     // Ignore malformed events and wait for the next one.
     return undefined;
@@ -67,7 +67,7 @@ function useQueueStream(): QueueState {
     // The whole queue, sent once when the stream (re)connects.
     const onSnapshot = (event: MessageEvent<string>) => {
       streamed = true;
-      const snapshot = parseEventData<QueueTask[]>(event);
+      const snapshot = parseEventData(event) as QueueTask[] | undefined;
       if (snapshot) {
         setTasks(snapshot);
         setError(null);
@@ -77,7 +77,7 @@ function useQueueStream(): QueueState {
     // One task that was added or changed.
     const onTask = (event: MessageEvent<string>) => {
       streamed = true;
-      const task = parseEventData<QueueTask>(event);
+      const task = parseEventData(event) as QueueTask | undefined;
       if (task) {
         setTasks((previous) => upsertTask(previous, task));
       }
@@ -85,7 +85,7 @@ function useQueueStream(): QueueState {
 
     // A finished task that dropped out of the server's bounded history.
     const onRemoved = (event: MessageEvent<string>) => {
-      const removed = parseEventData<{ id: number }>(event);
+      const removed = parseEventData(event) as { id: number } | undefined;
       if (removed) {
         setTasks((previous) => previous.filter((task) => task.id !== removed.id));
       }

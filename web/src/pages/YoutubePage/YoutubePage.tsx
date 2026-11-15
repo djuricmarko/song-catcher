@@ -1,5 +1,5 @@
 import { ArrowRight, Link2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { toast } from 'sonner';
 
 import { startYoutubeDownload, startYoutubePlaylistDownload } from '../../api/client';
@@ -39,7 +39,7 @@ export function YoutubePage() {
     setUrl(next);
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = url.trim();
     if (!trimmed.startsWith('http')) {

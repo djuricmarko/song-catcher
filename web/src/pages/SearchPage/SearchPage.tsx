@@ -1,5 +1,5 @@
 import { ArrowRight, Search } from 'lucide-react';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type SubmitEvent } from 'react';
 import { toast } from 'sonner';
 
 import type { SearchResultDto, SearchType } from '@song-catcher/shared';
@@ -100,7 +100,7 @@ export function SearchPage() {
     });
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setAlbumTracks(null);
     dismissKeyboard();

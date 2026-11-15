@@ -105,9 +105,7 @@ function TaskCard({ task }: { task: QueueTask }) {
             {task.tsStarted ? <span>start {formatClockTime(task.tsStarted)}</span> : null}
             {task.tsFinished ? <span>end {formatClockTime(task.tsFinished)}</span> : null}
             {duration ? <span>{duration}</span> : null}
-            {task.workerIndex !== null && task.workerIndex !== undefined ? (
-              <span>worker {task.workerIndex}</span>
-            ) : null}
+            {typeof task.workerIndex === 'number' ? <span>worker {task.workerIndex}</span> : null}
           </p>
         </div>
         <TaskStateBadge state={task.state} />

@@ -1,6 +1,6 @@
 import { Tabs } from '@base-ui/react/tabs';
 import { ArrowRight, Heart, ListMusic } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { toast } from 'sonner';
 
 import { startFavoritesDownload, startPlaylistDownload } from '../../api/client';
@@ -28,7 +28,7 @@ export function DeezerPage() {
   const [createZip, setCreateZip] = useState(false);
   const { busy, enqueue } = useEnqueue();
 
-  function onPlaylistSubmit(event: FormEvent<HTMLFormElement>) {
+  function onPlaylistSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = playlistUrl.trim();
     if (!value) {
@@ -45,7 +45,7 @@ export function DeezerPage() {
     });
   }
 
-  function onFavoritesSubmit(event: FormEvent<HTMLFormElement>) {
+  function onFavoritesSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = userId.trim();
     if (!/^\d+$/.test(value)) {

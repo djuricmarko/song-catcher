@@ -33,7 +33,7 @@ export function Segmented<T extends string>({
       onValueChange={(next) => {
         const [selected] = next;
         if (selected) {
-          onValueChange(selected as T);
+          onValueChange(selected);
         }
       }}
       className={cn(styles.group, className)}

@@ -65,7 +65,7 @@ function DirectoryRow({ entry }: { entry: FileEntry }) {
       type="button"
       className={styles.entry}
       onClick={() => {
-        navigate(filesRoute(entry.path));
+        void navigate(filesRoute(entry.path));
       }}
     >
       <Folder size={18} strokeWidth={1.5} className={styles.iconFolder} aria-hidden />

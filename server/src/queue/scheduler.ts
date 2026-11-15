@@ -5,9 +5,9 @@ import { errorMessage } from '../lib/errors.js';
 
 /** What a running task can tell the queue about itself. */
 export interface TaskContext {
-  reportProgress(current: number, maximum: number): void;
+  reportProgress: (current: number, maximum: number) => void;
   /** Records a non-fatal problem; the task can still succeed. */
-  reportWarning(message: string): void;
+  reportWarning: (message: string) => void;
 }
 
 export type TaskArgs = Record<string, unknown>;
@@ -91,7 +91,9 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       ? await Promise.race([
           workers,
           new Promise<false>((resolve) => {
-            timer = setTimeout(() => resolve(false), graceMs);
+            timer = setTimeout(() => {
+              resolve(false);
+            }, graceMs);
           }),
         ])
       : await workers;

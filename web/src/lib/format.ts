@@ -16,7 +16,7 @@ export function formatFileSize(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${SIZE_UNITS[unit]}`;
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${SIZE_UNITS[unit] ?? ''}`;
 }
 
 /** The time of day of a timestamp, or a placeholder when it is not set. */

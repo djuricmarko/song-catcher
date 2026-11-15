@@ -104,10 +104,11 @@ const envBoolean = z.preprocess((value) => {
   if (value === undefined || value === '') {
     return false;
   }
-  if (typeof value === 'boolean') {
+  if (typeof value !== 'string') {
+    // Environment variables are always text; anything else is for the schema to judge.
     return value;
   }
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = value.trim().toLowerCase();
   if (TRUE_VALUES.includes(normalized)) {
     return true;
   }

@@ -27,7 +27,7 @@ export function useKeyboardShortcuts(paths: readonly string[]): void {
         const path = paths[Number(digit) - 1];
         if (path) {
           event.preventDefault();
-          navigate(path);
+          void navigate(path);
         }
       }
     }

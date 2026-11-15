@@ -5,6 +5,7 @@ import type { Scheduler } from './scheduler.js';
  * interface) so it satisfies `TaskArgsMap` without an index signature, which
  * would otherwise let misspelled handler names compile.
  */
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- see above: must not be an interface
 export type DownloadTasks = {
   download_deezer_song_and_queue: { track_id: string; add_to_playlist: boolean };
   download_deezer_album_and_queue_and_zip: {

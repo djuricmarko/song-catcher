@@ -557,9 +557,9 @@ export class DeezerClient {
       );
     }
 
-    if (!isSoundFormat(media?.format)) {
+    if (!isSoundFormat(media.format)) {
       this.logger.warn(
-        { returned: media?.format, requested: this.soundFormats },
+        { returned: media.format, requested: this.soundFormats },
         'Deezer did not report the media format; assuming the preferred one',
       );
       return { url, format: this.currentSoundFormat };

@@ -95,18 +95,18 @@ async function writeMp3Metadata(outputFile: string, songTags: SongTags, options:
       : {}),
   };
 
+  // Typed as unknown on purpose: node-id3 declares a boolean but resolves
+  // with undefined on success, so only an explicit `false` means refusal.
+  let result: unknown;
   try {
-    const result = await NodeID3.Promise.write(tags, outputFile);
-    if (result === false) {
-      throw new MetadataError(`node-id3 refused to write tags to ${outputFile}`);
-    }
+    result = await NodeID3.Promise.write(tags, outputFile);
   } catch (error) {
-    if (error instanceof MetadataError) {
-      throw error;
-    }
     throw new MetadataError(`Could not write MP3 metadata: ${String(error)}`, {
       cause: error,
     });
+  }
+  if (result === false) {
+    throw new MetadataError(`node-id3 refused to write tags to ${outputFile}`);
   }
 }
 
