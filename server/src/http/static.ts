@@ -34,14 +34,18 @@ export function sendHtml(reply: FastifyReply, html: string): FastifyReply {
   return reply.type('text/html; charset=utf-8').send(html);
 }
 
-export async function registerWebApp(app: ApiFastifyInstance, prefix: string): Promise<string | undefined> {
-  if (!existsSync(WEB_DIST)) {
+export async function registerWebApp(
+  app: ApiFastifyInstance,
+  prefix: string,
+  webRoot = WEB_DIST,
+): Promise<string | undefined> {
+  if (!existsSync(webRoot)) {
     return undefined;
   }
 
-  const indexHtml = await readFile(path.join(WEB_DIST, 'index.html'), 'utf8');
+  const indexHtml = await readFile(path.join(webRoot, 'index.html'), 'utf8');
   await app.register(fastifyStatic, {
-    root: WEB_DIST,
+    root: webRoot,
     prefix: `${prefix}/`,
     index: false,
   });

@@ -33,12 +33,16 @@ export function resolveExecutable(command: string, envPath: string = process.env
   }
 
   const isPath = trimmed.includes('/') || trimmed.includes('\\');
-  const candidates = isPath
+  const locations = isPath
     ? [trimmed]
     : envPath
         .split(path.delimiter)
         .filter(Boolean)
         .map((directory) => path.join(directory, trimmed));
+  const candidates =
+    process.platform === 'win32' && path.extname(trimmed) === ''
+      ? locations.flatMap((location) => [location, `${location}.exe`])
+      : locations;
 
   for (const candidate of candidates) {
     try {

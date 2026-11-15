@@ -10,4 +10,4 @@ function readVersion(): string {
   }
 }
 
-export const VERSION = readVersion();
+export const VERSION = process.env.SONG_CATCHER_VERSION ?? readVersion();

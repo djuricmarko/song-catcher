@@ -15,7 +15,7 @@ export interface BuiltApp {
   downloads: DownloadService;
 }
 
-export async function buildApp(config: AppConfig, logger: Logger): Promise<BuiltApp> {
+export async function buildApp(config: AppConfig, logger: Logger, webRoot?: string): Promise<BuiltApp> {
   const deezer = new DeezerClient(config, logger);
   await deezer.init();
 
@@ -28,7 +28,7 @@ export async function buildApp(config: AppConfig, logger: Logger): Promise<Built
   registerDownloadHandlers(scheduler, downloads);
   scheduler.start();
 
-  const app = await createServer(config, logger, { deezer, scheduler, downloads });
+  const app = await createServer(config, logger, { deezer, scheduler, downloads }, webRoot);
   app.addHook('onClose', async () => {
     // Below Docker's default 10 s stop timeout, so the process exits cleanly instead of being SIGKILLed.
     await scheduler.stop(8_000);

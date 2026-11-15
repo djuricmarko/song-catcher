@@ -79,6 +79,37 @@ npm run dev:web      # Vite with hot reload (port 5173)
 Then open <http://localhost:5173>. Vite serves the UI there and proxies `/api` and `/downloads` to the backend on
 port 5000.
 
+## Desktop app
+
+Song Catcher also ships as an installable Electron app for Linux, Windows and macOS. It needs no Node.js, no
+`.env` file and no terminal: the backend runs inside the app, and `yt-dlp` and `ffmpeg` are bundled.
+
+```bash
+npm install
+npm run desktop        # build everything and start the app from source
+npm run desktop:dist   # build an installer for the platform you are on, into desktop/release/
+```
+
+`desktop:dist` produces an AppImage and a `.tar.gz` on Linux, an NSIS installer on Windows, and a `.dmg` and `.zip`
+on macOS. Each platform has to be built on that platform; the **Desktop** GitHub Actions workflow builds all three
+when you push a `v*` tag or start it by hand. The installers are not code-signed, so Windows SmartScreen and macOS
+Gatekeeper warn on first launch.
+
+How the desktop app differs from the server:
+
+- Settings live in a settings window (**File → Settings…**, `Ctrl+,`) instead of environment variables. The first
+  launch opens it and asks for the ARL cookie, which is stored encrypted with the operating system's keychain where
+  one is available.
+- Downloads go to `Music/Song Catcher` in your home folder unless you choose another folder.
+- The backend listens on `127.0.0.1` only and requires a password that is generated on every launch, so other
+  programs and websites on the computer cannot use it.
+- **File → Update yt-dlp** downloads the latest yt-dlp when YouTube downloads start failing.
+- FLAC tagging still needs `metaflac` (from the `flac` package) installed on the computer; it is not bundled. The
+  quality switch offers FLAC only when it is found.
+
+Settings, logs and the updated yt-dlp are kept in the per-user application data folder: `~/.config/Song Catcher`
+on Linux, `%APPDATA%\Song Catcher` on Windows and `~/Library/Application Support/Song Catcher` on macOS.
+
 ## Getting your ARL cookie
 
 1. Log in to Deezer in a browser.
@@ -196,6 +227,8 @@ npm run dev:server   # backend with reload on change (port 5000)
 npm run dev:web      # Vite with hot reload (UI at http://localhost:5173)
 npm run build        # shared types, backend and frontend production build
 npm start            # run the built backend (port 5000) and vite preview of web/dist (port 4173)
+npm run desktop      # build everything and start the Electron app
+npm run desktop:dist # build a desktop installer for the current platform
 npm test             # Vitest suites
 npm run typecheck    # strict TypeScript checks
 npm run lint         # ESLint with type-aware rules (run a build first; it reads the shared types)
@@ -224,6 +257,10 @@ web/      React 19 + Vite frontend (CSS Modules, Base UI)
   src/components/ shared components; ui/ holds the design-system primitives
   src/hooks/      queue stream, theme, previews, shortcuts, enqueueing
   src/lib/        formatting, paths, saving files
+desktop/  Electron app: runs the backend in a utility process and shows the web UI in a window
+  src/            main process, settings storage, bundled-tool lookup, the backend child process
+  renderer/       settings window (React, shares the web design-system components)
+  scripts/        esbuild bundling and the yt-dlp/ffmpeg download for packaging
 legacy/   Frozen Python 2.x app (removed in 4.0.0)
 ```
 

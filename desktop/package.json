@@ -1,0 +1,41 @@
+{
+  "name": "@song-catcher/desktop",
+  "productName": "Song Catcher",
+  "desktopName": "song-catcher.desktop",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Download music from Deezer and YouTube",
+  "author": "Song Catcher",
+  "license": "MIT",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "tsx scripts/build.ts && vite build",
+    "start": "electron .",
+    "fetch-tools": "tsx scripts/fetch-tools.ts",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p renderer/tsconfig.json"
+  },
+  "devDependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@song-catcher/server": "*",
+    "@song-catcher/shared": "*",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "45.3.2",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "lucide-react": "^1.61.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
+  }
+}
