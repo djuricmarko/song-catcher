@@ -4,6 +4,7 @@ import type { AppConfig } from './config/env.js';
 import { DeezerClient } from './deezer/client.js';
 import { DownloadService } from './downloads/service.js';
 import { createServer } from './http/server.js';
+import { registerDownloadHandlers } from './queue/handlers.js';
 import { Scheduler } from './queue/scheduler.js';
 import type { DownloadScheduler, DownloadTasks } from './queue/tasks.js';
 
@@ -20,65 +21,21 @@ export interface BuiltApp {
   downloads: DownloadService;
 }
 
+/**
+ * The composition root: creates every service, wires them together and
+ * returns the HTTP server, ready to listen. Logs in to Deezer on the way.
+ */
 export async function buildApp(config: AppConfig, logger: Logger): Promise<BuiltApp> {
   const deezer = new DeezerClient(config, logger);
   await deezer.init();
 
+  const downloads = new DownloadService(config, deezer, logger);
   const scheduler: DownloadScheduler = new Scheduler<DownloadTasks>(
     config.queue.workers,
     config.queue.historyLimit,
     logger,
   );
-  const downloads = new DownloadService(config, deezer, logger);
-
-  scheduler.register('download_deezer_song_and_queue', async (args, context) => {
-    return downloads.downloadTrack(args.track_id, args.add_to_playlist, context.reportProgress);
-  });
-
-  scheduler.register('download_deezer_album_and_queue_and_zip', async (args, context) => {
-    return downloads.downloadAlbum(
-      args.album_id,
-      args.add_to_playlist,
-      args.create_zip,
-      context.reportProgress,
-      context.reportWarning,
-    );
-  });
-
-  scheduler.register('download_deezer_playlist_and_queue_and_zip', async (args, context) => {
-    return downloads.downloadPlaylist(
-      args.playlist_id,
-      args.add_to_playlist,
-      args.create_zip,
-      context.reportProgress,
-      context.reportWarning,
-    );
-  });
-
-  scheduler.register('download_deezer_favorites', async (args, context) => {
-    return downloads.downloadFavorites(
-      args.user_id,
-      args.add_to_playlist,
-      args.create_zip,
-      context.reportProgress,
-      context.reportWarning,
-    );
-  });
-
-  scheduler.register('download_youtubedl_and_queue', async (args) => {
-    return downloads.downloadYoutube(args.video_url, args.add_to_playlist);
-  });
-
-  scheduler.register('download_youtube_playlist_and_queue_and_zip', async (args, context) => {
-    return downloads.downloadYoutubePlaylist(
-      args.playlist_url,
-      args.add_to_playlist,
-      args.create_zip,
-      context.reportProgress,
-      context.reportWarning,
-    );
-  });
-
+  registerDownloadHandlers(scheduler, downloads);
   scheduler.start();
 
   const app = await createServer(config, logger, { deezer, scheduler, downloads });

@@ -4,6 +4,7 @@ import { buildApp } from '../app.js';
 import type { AppConfig } from '../config/env.js';
 import { VERSION } from '../version.js';
 
+/** Builds the app, starts listening and shuts down cleanly on SIGINT/SIGTERM. */
 export async function startServer(config: AppConfig, logger: Logger) {
   const { app } = await buildApp(config, logger);
 

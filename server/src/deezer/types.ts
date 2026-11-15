@@ -1,25 +1,21 @@
-export const TYPE_TRACK = 'track';
-export const TYPE_ALBUM = 'album';
-export const TYPE_PLAYLIST = 'playlist';
-export const TYPE_ARTIST = 'artist';
-export const TYPE_ALBUM_TRACK = 'album_track';
-export const TYPE_ARTIST_ALBUM = 'artist_album';
-export const TYPE_ARTIST_TOP = 'artist_top';
+import type { SearchResultDto, SearchType } from '@song-catcher/shared';
 
-export type SearchType =
-  | typeof TYPE_TRACK
-  | typeof TYPE_ALBUM
-  | typeof TYPE_ARTIST
-  | typeof TYPE_ALBUM_TRACK
-  | typeof TYPE_ARTIST_ALBUM
-  | typeof TYPE_ARTIST_TOP;
+export type { SearchType } from '@song-catcher/shared';
 
-export type WebsiteType = typeof TYPE_TRACK | typeof TYPE_ALBUM | typeof TYPE_PLAYLIST;
+/** Every search type, for validating requests at runtime. */
+export const SEARCH_TYPES = [
+  'track',
+  'album',
+  'artist',
+  'album_track',
+  'artist_album',
+  'artist_top',
+] as const satisfies readonly SearchType[];
 
-export type IdType = typeof TYPE_TRACK | typeof TYPE_ALBUM | typeof TYPE_ARTIST;
+/** The kinds of deezer.com pages the client can read songs from. */
+export type WebsiteType = 'track' | 'album' | 'playlist';
 
-export type DownloadType = typeof TYPE_TRACK | typeof TYPE_ALBUM;
-
+/** A song as Deezer's website and private API describe it. */
 export interface DeezerSong {
   SNG_ID: string;
   SNG_TITLE: string;
@@ -33,6 +29,7 @@ export interface DeezerSong {
   PHYSICAL_RELEASE_DATE?: string;
   TRACK_TOKEN: string;
   MD5_ORIGIN: string;
+  /** Alternative recording to use when this one cannot be streamed. */
   FALLBACK?: DeezerSong;
   [key: string]: unknown;
 }
@@ -45,6 +42,7 @@ export interface DeezerPageData {
   [key: string]: unknown;
 }
 
+/** The state object deezer.com embeds in its track, album and playlist pages. */
 export interface DeezerAppState {
   DATA?: DeezerPageData;
   SONGS?: {
@@ -52,17 +50,7 @@ export interface DeezerAppState {
   };
 }
 
-export interface SearchResult {
-  id: string;
-  id_type: IdType;
-  title: string;
-  img_url: string;
-  album: string;
-  album_id: string | number;
-  artist: string;
-  artist_id?: string | number;
-  preview_url: string;
-}
+export type SearchResult = SearchResultDto;
 
 export interface PlaylistResult {
   name: string;

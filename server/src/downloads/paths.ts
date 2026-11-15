@@ -1,9 +1,11 @@
 import path from 'node:path';
 
+import type { FileExtension } from '../deezer/formats.js';
 import type { DeezerSong } from '../deezer/types.js';
-import { TYPE_ALBUM, TYPE_TRACK } from '../deezer/types.js';
+import { toPosixPath } from '../lib/paths.js';
 
-export type SongPathType = typeof TYPE_TRACK | typeof TYPE_ALBUM | 'playlist';
+/** What a song is downloaded as part of; decides its folder and file name. */
+export type SongPathType = 'track' | 'album' | 'playlist';
 
 const UNSAFE_FILENAME_CHARACTERS = /[/\\:*?"<>|]/g;
 const MAX_FILENAME_LENGTH = 180;
@@ -54,11 +56,12 @@ export function cleanFilename(value: string, extension?: string): string {
   return `${cleaned}${suffix}`;
 }
 
-export function buildSongFilename(song: DeezerSong, searchType: SongPathType, extension: 'mp3' | 'flac'): string {
+/** `Artist - Title.ext`, or `NN - Artist Title.ext` inside an album so files sort in track order. */
+export function buildSongFilename(song: DeezerSong, searchType: SongPathType, extension: FileExtension): string {
   const artist = song.ART_NAME || 'unknown artist';
   const title = song.SNG_TITLE || 'unknown title';
 
-  if (searchType === TYPE_ALBUM) {
+  if (searchType === 'album') {
     const trackNumber = Number.parseInt(song.TRACK_NUMBER ?? '', 10);
     const prefix = Number.isFinite(trackNumber) ? `${String(trackNumber).padStart(2, '0')} - ` : '';
     return cleanFilename(`${prefix}${artist} ${title}`, extension);
@@ -77,6 +80,7 @@ export function buildPlaylistDirectory(playlistName: string): string {
   return cleanFilename(playlistName);
 }
 
+/** The directory a song belongs in: the songs folder, its album's folder or its playlist's folder. */
 export function songDirectory(
   baseDirectories: {
     songsDir: string;
@@ -87,10 +91,10 @@ export function songDirectory(
   song: DeezerSong,
   playlistName?: string,
 ): string {
-  if (searchType === TYPE_TRACK) {
+  if (searchType === 'track') {
     return baseDirectories.songsDir;
   }
-  if (searchType === TYPE_ALBUM) {
+  if (searchType === 'album') {
     return path.join(baseDirectories.albumsDir, buildAlbumDirectory(song));
   }
   if (!playlistName) {
@@ -99,10 +103,11 @@ export function songDirectory(
   return path.join(baseDirectories.playlistsDir, buildPlaylistDirectory(playlistName));
 }
 
+/** MPD addresses songs relative to its music directory, always with forward slashes. */
 export function mpdRelativePath(musicDirRoot: string, absolutePath: string): string {
   const relative = path.relative(musicDirRoot, absolutePath);
   if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`${absolutePath} is not inside DEEZER_MPD_MUSIC_DIR_ROOT`);
   }
-  return relative.split(path.sep).join('/');
+  return toPosixPath(relative);
 }

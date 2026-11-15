@@ -1,19 +1,10 @@
 import { load } from 'cheerio';
 
+import type { DeezerApiError } from './responses.js';
 import type { DeezerAppState, SearchResult, SearchType } from './types.js';
-import { TYPE_ALBUM, TYPE_ALBUM_TRACK, TYPE_ARTIST, TYPE_ARTIST_ALBUM, TYPE_ARTIST_TOP, TYPE_TRACK } from './types.js';
 
-export interface DeezerApiError {
-  message?: string;
-  type?: string;
-  code?: number;
-}
-
-export interface SearchResponse {
-  data?: unknown[];
-  tracks?: { data?: unknown[] };
-  error?: DeezerApiError | string;
-}
+const UNKNOWN_API_ERROR = 'unknown Deezer API error';
+const APP_STATE_START = '{"DATA":';
 
 // The public API omits fields depending on the endpoint (e.g. album tracks
 // may lack `album`), so treat everything as optional.
@@ -38,18 +29,15 @@ interface DeezerApiArtist {
   picture_small?: string;
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
+/** Describes the `error` field of a public API response. */
 export function apiErrorText(error: DeezerApiError | string | undefined): string {
   if (!error) {
-    return 'unknown Deezer API error';
+    return UNKNOWN_API_ERROR;
   }
   if (typeof error === 'string') {
     return error;
   }
-  return error.message ?? error.type ?? 'unknown Deezer API error';
+  return error.message ?? error.type ?? UNKNOWN_API_ERROR;
 }
 
 /**
@@ -84,7 +72,7 @@ function balancedObject(text: string, start: number): string | undefined {
 /**
  * Deezer embeds the page state in an inline script, typically as
  * `window.__DZR_APP_STATE__ = {"DATA":...};` possibly followed by more code.
- * Extract just the balanced object after each `{"DATA":` and ignore
+ * Extracts just the balanced object after each `{"DATA":` and ignores
  * candidates that fail to parse.
  */
 export function extractAppState(html: string): DeezerAppState | undefined {
@@ -94,25 +82,33 @@ export function extractAppState(html: string): DeezerAppState | undefined {
     .get();
 
   for (const script of scripts) {
-    for (let start = script.indexOf('{"DATA":'); start !== -1;) {
-      const candidate = balancedObject(script, start);
-      if (candidate) {
-        try {
-          const state = JSON.parse(candidate) as DeezerAppState;
-          if (state.DATA) {
-            return state;
-          }
-        } catch {
-          // Not valid JSON; try the next occurrence.
-        }
+    let start = script.indexOf(APP_STATE_START);
+    while (start !== -1) {
+      const state = parseAppState(balancedObject(script, start));
+      if (state) {
+        return state;
       }
-      start = script.indexOf('{"DATA":', start + 1);
+      start = script.indexOf(APP_STATE_START, start + 1);
     }
   }
 
   return undefined;
 }
 
+function parseAppState(candidate: string | undefined): DeezerAppState | undefined {
+  if (!candidate) {
+    return undefined;
+  }
+  try {
+    const state = JSON.parse(candidate) as DeezerAppState;
+    return state.DATA ? state : undefined;
+  } catch {
+    // Not valid JSON; the caller tries the next occurrence.
+    return undefined;
+  }
+}
+
+/** Accepts a playlist URL (anything containing `/playlist/<id>`) or a bare numeric id. */
 export function extractPlaylistId(value: string): string | undefined {
   const match = /\/playlist\/(\d+)/.exec(value) ?? /^(\d+)$/.exec(value);
   return match?.[1];
@@ -125,6 +121,11 @@ export interface AlbumContext {
   cover_small?: string;
 }
 
+/**
+ * Converts one item of a public API response into the shape the frontend
+ * renders. The kind of item is implied by the search type; returns undefined
+ * for anything that is not an object with an id.
+ */
 export function mapSearchResult(
   item: unknown,
   searchType: SearchType,
@@ -134,11 +135,11 @@ export function mapSearchResult(
     return undefined;
   }
 
-  if (searchType === TYPE_ALBUM || searchType === TYPE_ARTIST_ALBUM) {
+  if (searchType === 'album' || searchType === 'artist_album') {
     const album = item as DeezerApiAlbum;
     return {
       id: String(album.id),
-      id_type: TYPE_ALBUM,
+      id_type: 'album',
       album: album.title ?? '',
       album_id: album.id ?? '',
       img_url: album.cover_small ?? '',
@@ -148,12 +149,12 @@ export function mapSearchResult(
     };
   }
 
-  if (searchType === TYPE_TRACK || searchType === TYPE_ARTIST_TOP || searchType === TYPE_ALBUM_TRACK) {
+  if (searchType === 'track' || searchType === 'artist_top' || searchType === 'album_track') {
     const track = item as DeezerApiTrack;
     const album = track.album ?? albumContext;
     return {
       id: String(track.id),
-      id_type: TYPE_TRACK,
+      id_type: 'track',
       title: track.title ?? '',
       img_url: album?.cover_small ?? albumContext?.cover_small ?? '',
       album: album?.title ?? albumContext?.title ?? '',
@@ -166,7 +167,7 @@ export function mapSearchResult(
   const artist = item as DeezerApiArtist;
   return {
     id: String(artist.id),
-    id_type: TYPE_ARTIST,
+    id_type: 'artist',
     title: '',
     img_url: artist.picture_small ?? '',
     album: '',

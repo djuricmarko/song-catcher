@@ -9,6 +9,7 @@ import { Blowfish } from 'egoroof-blowfish';
  * encrypted block to the next.
  */
 export const BLOCK_SIZE = 2048;
+const ENCRYPTED_BLOCK_INTERVAL = 3;
 export const BLOWFISH_IV = Buffer.from('0001020304050607', 'hex');
 const BLOWFISH_SECRET = 'g4el58wc0zvf9na1';
 
@@ -48,10 +49,6 @@ function nativeBlowfishAvailable(): boolean {
 
 const USE_NATIVE_BLOWFISH = nativeBlowfishAvailable();
 
-export function isNativeBlowfishAvailable(): boolean {
-  return USE_NATIVE_BLOWFISH;
-}
-
 /**
  * Returns a function that decrypts 2048-byte blocks with the given key. The
  * pure-JS fallback is built once per key because its key schedule is costly.
@@ -78,6 +75,7 @@ export function createBlockDecryptor(key: Buffer): (block: Buffer) => Buffer {
   };
 }
 
+/** Decrypts a single block. Use `createBlockDecryptor` when decrypting many with the same key. */
 export function decryptBlock(block: Buffer, key: Buffer): Buffer {
   return createBlockDecryptor(key)(block);
 }
@@ -100,7 +98,8 @@ export function createDecryptTransform(key: Buffer): Transform {
       while (remainder.length >= BLOCK_SIZE) {
         const block = remainder.subarray(0, BLOCK_SIZE);
         remainder = remainder.subarray(BLOCK_SIZE);
-        output.push(blockIndex % 3 === 0 ? decrypt(block) : block);
+        const isEncrypted = blockIndex % ENCRYPTED_BLOCK_INTERVAL === 0;
+        output.push(isEncrypted ? decrypt(block) : block);
         blockIndex += 1;
       }
 

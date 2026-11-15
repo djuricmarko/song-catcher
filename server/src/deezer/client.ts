@@ -7,26 +7,30 @@ import type { Logger } from 'pino';
 import { CookieJar } from 'tough-cookie';
 
 import type { AppConfig } from '../config/env.js';
+import { errorMessage } from '../lib/errors.js';
 import { calcBfKey, createDecryptTransform } from './crypto.js';
+import { Deezer403Exception, Deezer404Exception, DeezerApiException, isSessionError } from './errors.js';
+import {
+  extensionForFormat,
+  isSoundFormat,
+  preferredSoundFormats,
+  type AccountQuality,
+  type FileExtension,
+  type SoundFormat,
+} from './formats.js';
 import { writeSongMetadata } from './metadata.js';
+import { apiErrorText, extractAppState, extractPlaylistId, mapSearchResult, type AlbumContext } from './parse.js';
+import { PictureCache } from './picture-cache.js';
 import { createProxyAgent } from './proxy.js';
+import type {
+  FavoritesResponse,
+  MediaResponse,
+  PlaylistResponse,
+  SearchResponse,
+  UserDataResponse,
+} from './responses.js';
 import {
-  apiErrorText,
-  errorMessage,
-  extractAppState,
-  extractPlaylistId,
-  mapSearchResult,
-  type AlbumContext,
-  type DeezerApiError,
-  type SearchResponse,
-} from './parse.js';
-import {
-  TYPE_ALBUM,
-  TYPE_ALBUM_TRACK,
-  TYPE_ARTIST,
-  TYPE_ARTIST_ALBUM,
-  TYPE_ARTIST_TOP,
-  TYPE_TRACK,
+  SEARCH_TYPES,
   type DeezerAppState,
   type DeezerSong,
   type PlaylistResult,
@@ -35,21 +39,51 @@ import {
   type WebsiteType,
 } from './types.js';
 
-const USER_AGENT = 'Mozilla/5.0 (X11; Linux i686; rv:135.0) Gecko/20100101 Firefox/135.0';
-const GW_LIGHT_URL = 'https://www.deezer.com/ajax/gw-light.php';
+const WEBSITE_URL = 'https://www.deezer.com';
+const PUBLIC_API_URL = 'https://api.deezer.com';
+const GW_LIGHT_URL = `${WEBSITE_URL}/ajax/gw-light.php`;
 const USER_DATA_URL = `${GW_LIGHT_URL}?method=deezer.getUserData&input=3&api_version=1.0&api_token=`;
 const MEDIA_URL = 'https://media.deezer.com/v1/get_url';
-const COVER_BASE = 'https://e-cdns-images.dzcdn.net/images/cover';
+const COVER_BASE_URL = 'https://e-cdns-images.dzcdn.net/images/cover';
+
+const USER_AGENT = 'Mozilla/5.0 (X11; Linux i686; rv:135.0) Gecko/20100101 Firefox/135.0';
+
+/** Deezer only answers requests that look like they come from its own web player. */
+const BROWSER_HEADERS: Record<string, string> = {
+  'user-agent': USER_AGENT,
+  pragma: 'no-cache',
+  origin: WEBSITE_URL,
+  'accept-language': 'en-US,en;q=0.9',
+  accept: '*/*',
+  'cache-control': 'no-cache',
+  'x-requested-with': 'XMLHttpRequest',
+  referer: `${WEBSITE_URL}/login`,
+  dnt: '1',
+};
+
+const SHORT_LINK_HOSTS = new Set(['link.deezer.com', 'deezer.page.link']);
+const SHORT_LINK_TIMEOUT_MS = 10_000;
+
+/** A track every account can open; used to check that the login works. */
+const LOGIN_TEST_TRACK_ID = '917265';
+
 /** Covers are ~100-300 KB; keep enough for a few albums being downloaded in parallel. */
 const PICTURE_CACHE_SIZE = 16;
+const COVER_SIZE = '1200x1200';
 
-export type SoundFormat = 'FLAC' | 'MP3_320' | 'MP3_128';
+/** Don't hammer Deezer when many songs fail for a reason a refresh can't fix. */
+const SESSION_REFRESH_INTERVAL_MS = 60_000;
 
-const SOUND_FORMATS: readonly SoundFormat[] = ['FLAC', 'MP3_320', 'MP3_128'];
+/** Guards against a `next` link that never ends. */
+const FAVORITES_MAX_PAGES = 1000;
+/** Far above any real library, so favorites normally arrive in one page. */
+const FAVORITES_PAGE_SIZE = 10_000_000_000;
+/** Deezer has no "all songs" switch for playlists; ask for more than any playlist holds. */
+const PLAYLIST_MAX_SONGS = 1_000_000;
+const ARTIST_TOP_LIMIT = 20;
 
-export function extensionForFormat(format: SoundFormat): 'flac' | 'mp3' {
-  return format === 'FLAC' ? 'flac' : 'mp3';
-}
+/** Media API errors that a fresh license token may fix. */
+const SESSION_ERROR_PATTERN = /licen[cs]e|expired|session|auth/i;
 
 export interface SongSource {
   url: string;
@@ -59,39 +93,13 @@ export interface SongSource {
 
 export interface DownloadedSong {
   format: SoundFormat;
-  extension: 'flac' | 'mp3';
+  extension: FileExtension;
 }
 
-export class Deezer404Exception extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = 'Deezer404Exception';
-  }
+interface UserData {
+  licenseToken: string;
+  quality: AccountQuality;
 }
-
-export class Deezer403Exception extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = 'Deezer403Exception';
-  }
-}
-
-export class DeezerApiException extends Error {
-  /** True when the failure looks like an expired session or license token. */
-  public readonly sessionRelated: boolean;
-
-  public constructor(message: string, options?: ErrorOptions & { sessionRelated?: boolean }) {
-    super(message, options);
-    this.name = 'DeezerApiException';
-    this.sessionRelated = options?.sessionRelated ?? false;
-  }
-}
-
-function isSessionError(error: unknown): boolean {
-  return error instanceof Deezer403Exception || (error instanceof DeezerApiException && error.sessionRelated);
-}
-
-const SHORT_LINK_HOSTS = new Set(['link.deezer.com', 'deezer.page.link']);
 
 /**
  * Only real Deezer short-link hosts are followed; a substring match would let
@@ -106,113 +114,58 @@ export function isDeezerShortLink(value: string): boolean {
   }
 }
 
-/** Don't hammer Deezer when many songs fail for a reason a refresh can't fix. */
-const SESSION_REFRESH_INTERVAL_MS = 60_000;
-
-interface WebSoundQuality {
-  high?: boolean;
-  lossless?: boolean;
+/** Runs `request`; a failure becomes a DeezerApiException reading "`context`: reason". */
+async function describeFailure<T>(context: string, request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    throw new DeezerApiException(`${context}: ${errorMessage(error)}`, { cause: error });
+  }
 }
 
-interface UserDataResults {
-  checkForm?: string;
-  USER?: {
-    OPTIONS?: {
-      license_token?: string;
-      web_hq?: boolean;
-      web_sound_quality?: WebSoundQuality;
-    };
-  };
+function searchUrl(searchType: SearchType, search: string): string {
+  const id = encodeURIComponent(search);
+  switch (searchType) {
+    case 'album_track':
+      return `${PUBLIC_API_URL}/album/${id}`;
+    case 'artist_top':
+      return `${PUBLIC_API_URL}/artist/${id}/top?limit=${ARTIST_TOP_LIMIT}`;
+    case 'artist_album':
+      return `${PUBLIC_API_URL}/artist/${id}/albums`;
+    default:
+      return `${PUBLIC_API_URL}/search/${searchType}?${new URLSearchParams({ q: search }).toString()}`;
+  }
 }
 
-interface UserDataResponse {
-  results?: UserDataResults;
-}
-
-interface PlaylistResponse {
-  error?: unknown[];
-  results?: {
-    DATA?: {
-      TITLE?: string;
-      NB_SONG?: number;
-    };
-    SONGS?: {
-      count?: number;
-      data?: DeezerSong[];
-    };
-  };
-}
-
-interface FavoritesResponse {
-  data?: Array<{ id: number }>;
-  total?: number;
-  next?: string;
-  error?: DeezerApiError | string;
-}
-
-interface GetUrlSource {
-  url?: string;
-}
-
-interface GetUrlMedia {
-  format?: string;
-  sources?: GetUrlSource[];
-}
-
-interface GetUrlEntry {
-  errors?: Array<{ message?: string }>;
-  media?: GetUrlMedia[];
-}
-
-interface GetUrlResponse {
-  data?: GetUrlEntry[];
-}
-
+/**
+ * Talks to Deezer on behalf of one account: the website (page state), the
+ * private gw-light API (session, playlists), the public API (search,
+ * favorites) and the media API (stream URLs).
+ */
 export class DeezerClient {
   private readonly http: Got;
-  private readonly jar: CookieJar;
+  private readonly jar = new CookieJar();
+  private readonly pictures = new PictureCache(PICTURE_CACHE_SIZE);
   private licenseToken = '';
   /** Formats to request, best first; Deezer returns the best one available per track. */
   private soundFormats: SoundFormat[] = ['MP3_128'];
   private initialized = false;
   private lastInitAt = 0;
   private refreshing: Promise<boolean> | undefined;
-  private readonly pictureCache = new Map<string, Promise<Buffer | undefined>>();
 
   public constructor(
     private readonly config: AppConfig,
     private readonly logger: Logger,
   ) {
-    this.jar = new CookieJar();
-
-    const headers: Record<string, string> = {
-      'user-agent': USER_AGENT,
-      pragma: 'no-cache',
-      origin: 'https://www.deezer.com',
-      'accept-language': 'en-US,en;q=0.9',
-      accept: '*/*',
-      'cache-control': 'no-cache',
-      'x-requested-with': 'XMLHttpRequest',
-      referer: 'https://www.deezer.com/login',
-      dnt: '1',
-    };
-
     const proxyAgent = createProxyAgent(config.deezer.proxyUrl);
 
     this.http = got.extend({
       cookieJar: this.jar,
-      headers,
+      headers: BROWSER_HEADERS,
       timeout: { response: 30_000, socket: 60_000 },
       retry: { limit: 0 },
       followRedirect: true,
-      ...(proxyAgent
-        ? {
-            agent: {
-              http: proxyAgent,
-              https: proxyAgent,
-            },
-          }
-        : {}),
+      ...(proxyAgent ? { agent: { http: proxyAgent, https: proxyAgent } } : {}),
     });
   }
 
@@ -225,15 +178,18 @@ export class DeezerClient {
     return this.soundFormats[0] ?? 'MP3_128';
   }
 
-  public get fileExtension(): 'flac' | 'mp3' {
+  public get fileExtension(): FileExtension {
     return extensionForFormat(this.currentSoundFormat);
   }
 
+  // --- Session ---------------------------------------------------------------
+
+  /** Logs in with the ARL cookie and learns which audio quality the account may stream. */
   public async init(): Promise<void> {
     await this.setCookies();
     const userData = await this.getUserData();
     this.licenseToken = userData.licenseToken;
-    this.setSongQuality(userData.webSoundQuality, userData.webHq);
+    this.setSongQuality(userData.quality);
     this.initialized = true;
     this.lastInitAt = Date.now();
 
@@ -246,33 +202,28 @@ export class DeezerClient {
     );
   }
 
-  private async setCookies(): Promise<void> {
+  public async testLogin(): Promise<boolean> {
     try {
-      await this.jar.setCookie(
-        `arl=${this.config.deezer.cookieArl}; Domain=.deezer.com; Path=/`,
-        'https://www.deezer.com/',
-      );
-      await this.jar.setCookie('comeback=1; Domain=.deezer.com; Path=/', 'https://www.deezer.com/');
+      const song = await this.getSongInfosFromWebsite('track', LOGIN_TEST_TRACK_ID);
+      this.logger.info({ songId: song.SNG_ID }, 'Deezer login is working');
+      return true;
     } catch (error) {
-      throw new DeezerApiException(`Could not set the Deezer ARL cookie: ${errorMessage(error)}`, {
-        cause: error,
-      });
+      this.logger.warn({ err: error }, 'Deezer login check failed');
+      return false;
     }
   }
 
-  private async getUserData(): Promise<{
-    licenseToken: string;
-    webSoundQuality: WebSoundQuality;
-    webHq: boolean;
-  }> {
-    let body: UserDataResponse;
-    try {
-      body = await this.http.get(USER_DATA_URL).json<UserDataResponse>();
-    } catch (error) {
-      throw new DeezerApiException(`Could not retrieve the Deezer license token: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
+  private async setCookies(): Promise<void> {
+    await describeFailure('Could not set the Deezer ARL cookie', async () => {
+      await this.jar.setCookie(`arl=${this.config.deezer.cookieArl}; Domain=.deezer.com; Path=/`, `${WEBSITE_URL}/`);
+      await this.jar.setCookie('comeback=1; Domain=.deezer.com; Path=/', `${WEBSITE_URL}/`);
+    });
+  }
+
+  private async getUserData(): Promise<UserData> {
+    const body = await describeFailure('Could not retrieve the Deezer license token', () =>
+      this.http.get(USER_DATA_URL).json<UserDataResponse>(),
+    );
 
     const options = body.results?.USER?.OPTIONS;
     const licenseToken = options?.license_token;
@@ -281,7 +232,33 @@ export class DeezerClient {
       throw new DeezerApiException('Could not retrieve the Deezer license token. Is DEEZER_COOKIE_ARL still valid?');
     }
 
-    return { licenseToken, webSoundQuality, webHq: options.web_hq === true };
+    return {
+      licenseToken,
+      quality: {
+        lossless: webSoundQuality.lossless === true,
+        high: webSoundQuality.high === true || options.web_hq === true,
+      },
+    };
+  }
+
+  private setSongQuality(account: AccountQuality): void {
+    if (this.config.deezer.quality === 'flac' && !account.lossless) {
+      this.logger.warn(
+        'DEEZER_QUALITY=flac is configured, but the Deezer account does not support lossless. Falling back to mp3.',
+      );
+    }
+    this.soundFormats = preferredSoundFormats(this.config.deezer.quality, account);
+  }
+
+  private async getCsrfToken(): Promise<string> {
+    const body = await describeFailure('Could not retrieve a Deezer CSRF token', () =>
+      this.http.post(USER_DATA_URL).json<UserDataResponse>(),
+    );
+    const token = body.results?.checkForm;
+    if (!token) {
+      throw new DeezerApiException('Deezer did not return a CSRF token');
+    }
+    return token;
   }
 
   /**
@@ -324,70 +301,65 @@ export class DeezerClient {
     }
   }
 
-  private setSongQuality(webSoundQuality: WebSoundQuality, webHq: boolean): void {
-    const lossless = webSoundQuality.lossless === true;
-    const high = lossless || webSoundQuality.high === true || webHq;
+  // --- Songs, albums and playlists from deezer.com ---------------------------
 
-    if (this.config.deezer.quality === 'flac' && !lossless) {
-      this.logger.warn(
-        'DEEZER_QUALITY=flac is configured, but the Deezer account does not support lossless. Falling back to mp3.',
-      );
-    }
-
-    if (this.config.deezer.quality === 'flac' && lossless) {
-      this.soundFormats = ['FLAC', 'MP3_320', 'MP3_128'];
-    } else if (high) {
-      this.soundFormats = ['MP3_320', 'MP3_128'];
-    } else {
-      this.soundFormats = ['MP3_128'];
-    }
-  }
-
-  public async getSongInfosFromWebsite(searchType: typeof TYPE_TRACK, id: string | number): Promise<DeezerSong>;
-  public async getSongInfosFromWebsite(
-    searchType: typeof TYPE_ALBUM | 'playlist',
-    id: string | number,
-  ): Promise<DeezerSong[]>;
+  /**
+   * Reads songs from a deezer.com page: one song for a track, every song for
+   * an album or playlist. Songs carry the album artist and release date so
+   * they can be tagged without further requests.
+   */
+  public async getSongInfosFromWebsite(searchType: 'track', id: string | number): Promise<DeezerSong>;
+  public async getSongInfosFromWebsite(searchType: 'album' | 'playlist', id: string | number): Promise<DeezerSong[]>;
   public async getSongInfosFromWebsite(
     searchType: WebsiteType,
     id: string | number,
   ): Promise<DeezerSong | DeezerSong[]> {
     const state = await this.fetchWebsiteState(searchType, id);
+    const pageType = state.DATA?.__TYPE__;
 
-    if (state.DATA?.__TYPE__ === 'playlist' || state.DATA?.__TYPE__ === 'album') {
-      const albumArtist = state.DATA.ART_NAME?.trim() ?? '';
-      const releaseDate = state.DATA.PHYSICAL_RELEASE_DATE;
-      const songs = state.SONGS?.data ?? [];
-      for (const song of songs) {
-        if (albumArtist) {
-          song.ALB_ART_NAME = albumArtist;
-        }
-        if (releaseDate && !song.PHYSICAL_RELEASE_DATE) {
-          song.PHYSICAL_RELEASE_DATE = releaseDate;
-        }
-      }
-      return songs;
+    if (pageType === 'playlist' || pageType === 'album') {
+      return this.songsOfCollection(state);
+    }
+    if (pageType === 'song') {
+      const song = await this.songWithAlbumDetails(state.DATA as unknown as DeezerSong);
+      return searchType === 'track' ? song : [song];
     }
 
-    if (state.DATA?.__TYPE__ === 'song') {
-      const song = state.DATA as unknown as DeezerSong;
-      if (song.ALB_ID) {
-        try {
-          const albumState = await this.fetchWebsiteState(TYPE_ALBUM, song.ALB_ID);
-          song.ALB_ART_NAME = albumState.DATA?.ART_NAME || song.ART_NAME;
-          if (albumState.DATA?.PHYSICAL_RELEASE_DATE) {
-            song.PHYSICAL_RELEASE_DATE = albumState.DATA.PHYSICAL_RELEASE_DATE;
-          }
-        } catch (error) {
-          this.logger.warn({ err: error, songId: song.SNG_ID }, 'Could not retrieve the album artist for a track');
-        }
-      }
-      return searchType === TYPE_TRACK ? song : [song];
-    }
+    throw new DeezerApiException(`Unexpected Deezer page type '${pageType ?? 'unknown'}' for ${searchType}/${id}`);
+  }
 
-    throw new DeezerApiException(
-      `Unexpected Deezer page type '${state.DATA?.__TYPE__ ?? 'unknown'}' for ${searchType}/${id}`,
-    );
+  /** Copies the album artist and release date of an album/playlist page onto its songs. */
+  private songsOfCollection(state: DeezerAppState): DeezerSong[] {
+    const albumArtist = state.DATA?.ART_NAME?.trim() ?? '';
+    const releaseDate = state.DATA?.PHYSICAL_RELEASE_DATE;
+    const songs = state.SONGS?.data ?? [];
+
+    for (const song of songs) {
+      if (albumArtist) {
+        song.ALB_ART_NAME = albumArtist;
+      }
+      if (releaseDate && !song.PHYSICAL_RELEASE_DATE) {
+        song.PHYSICAL_RELEASE_DATE = releaseDate;
+      }
+    }
+    return songs;
+  }
+
+  /** A track page lacks the album artist and release date, so look them up on the album page. */
+  private async songWithAlbumDetails(song: DeezerSong): Promise<DeezerSong> {
+    if (!song.ALB_ID) {
+      return song;
+    }
+    try {
+      const album = (await this.fetchWebsiteState('album', song.ALB_ID)).DATA;
+      song.ALB_ART_NAME = album?.ART_NAME || song.ART_NAME;
+      if (album?.PHYSICAL_RELEASE_DATE) {
+        song.PHYSICAL_RELEASE_DATE = album.PHYSICAL_RELEASE_DATE;
+      }
+    } catch (error) {
+      this.logger.warn({ err: error, songId: song.SNG_ID }, 'Could not retrieve the album artist for a track');
+    }
+    return song;
   }
 
   private fetchWebsiteState(searchType: WebsiteType, id: string | number): Promise<DeezerAppState> {
@@ -395,18 +367,10 @@ export class DeezerClient {
   }
 
   private async fetchWebsiteStateOnce(searchType: WebsiteType, id: string | number): Promise<DeezerAppState> {
-    const url = `https://www.deezer.com/us/${searchType}/${id}`;
-    let response: { statusCode: number; body: string };
-    try {
-      response = await this.http.get(url, {
-        throwHttpErrors: false,
-        responseType: 'text',
-      });
-    } catch (error) {
-      throw new DeezerApiException(`Could not open ${url}: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
+    const url = `${WEBSITE_URL}/us/${searchType}/${id}`;
+    const response = await describeFailure(`Could not open ${url}`, () =>
+      this.http.get(url, { throwHttpErrors: false, responseType: 'text' }),
+    );
 
     if (response.statusCode === 404) {
       throw new Deezer404Exception(`Got a 404 for ${url} from Deezer`);
@@ -414,6 +378,7 @@ export class DeezerClient {
     if (response.statusCode >= 400) {
       throw new DeezerApiException(`Got HTTP ${response.statusCode} for ${url} from Deezer`);
     }
+    // Only pages rendered for a logged-in user contain the song details.
     if (!response.body.includes('MD5_ORIGIN')) {
       throw new Deezer403Exception('We are not logged in on deezer.com. Please update DEEZER_COOKIE_ARL.');
     }
@@ -425,75 +390,48 @@ export class DeezerClient {
     return state;
   }
 
+  // --- Search, playlists and favorites ---------------------------------------
+
+  /**
+   * Searches the public API. For `album_track`, `artist_top` and
+   * `artist_album` the `search` argument is the album or artist id.
+   */
   public async deezerSearch(search: string, searchType: SearchType): Promise<SearchResult[]> {
-    if (
-      ![TYPE_TRACK, TYPE_ALBUM, TYPE_ARTIST, TYPE_ALBUM_TRACK, TYPE_ARTIST_ALBUM, TYPE_ARTIST_TOP].includes(searchType)
-    ) {
+    if (!SEARCH_TYPES.includes(searchType)) {
       throw new DeezerApiException(`Unsupported search type: ${searchType}`);
     }
 
-    const encodedSearch = new URLSearchParams({ q: search }).toString();
-    const encodedId = encodeURIComponent(search);
-    let url: string;
-    if (searchType === TYPE_ALBUM_TRACK) {
-      url = `https://api.deezer.com/album/${encodedId}`;
-    } else if (searchType === TYPE_ARTIST_TOP) {
-      url = `https://api.deezer.com/artist/${encodedId}/top?limit=20`;
-    } else if (searchType === TYPE_ARTIST_ALBUM) {
-      url = `https://api.deezer.com/artist/${encodedId}/albums`;
-    } else {
-      url = `https://api.deezer.com/search/${searchType}?${encodedSearch}`;
-    }
-
-    let body: SearchResponse;
-    try {
-      body = await this.http.get(url).json<SearchResponse>();
-    } catch (error) {
-      throw new DeezerApiException(`Could not search for music: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
-
+    const body = await describeFailure('Could not search for music', () =>
+      this.http.get(searchUrl(searchType, search)).json<SearchResponse>(),
+    );
     if (body.error) {
       throw new DeezerApiException(`Deezer search failed: ${apiErrorText(body.error)}`);
     }
 
-    const data = searchType === TYPE_ALBUM_TRACK ? (body.tracks?.data ?? []) : (body.data ?? []);
     // For album tracks the album itself is the response body.
-    const albumContext = searchType === TYPE_ALBUM_TRACK ? (body as AlbumContext) : undefined;
+    const isAlbumLookup = searchType === 'album_track';
+    const items = isAlbumLookup ? (body.tracks?.data ?? []) : (body.data ?? []);
+    const albumContext = isAlbumLookup ? (body as AlbumContext) : undefined;
 
-    return data.flatMap((item) => mapSearchResult(item, searchType, albumContext) ?? []);
+    return items.flatMap((item) => mapSearchResult(item, searchType, albumContext) ?? []);
   }
 
+  /** Loads a playlist by id, URL or Deezer short link. */
   public async parseDeezerPlaylist(playlistIdOrUrl: string): Promise<PlaylistResult> {
-    let value = playlistIdOrUrl.trim();
+    const input = playlistIdOrUrl.trim();
+    const resolved = isDeezerShortLink(input)
+      ? await describeFailure(`Could not resolve short link '${playlistIdOrUrl}'`, () => this.followRedirects(input))
+      : input;
 
-    if (isDeezerShortLink(value)) {
-      try {
-        const response = await this.http.head(value, {
-          followRedirect: true,
-          throwHttpErrors: false,
-          timeout: { request: 10_000 },
-        });
-        value = response.url;
-      } catch (error) {
-        throw new DeezerApiException(`Could not resolve short link '${playlistIdOrUrl}': ${errorMessage(error)}`, {
-          cause: error,
-        });
-      }
-    }
-
-    const playlistId = extractPlaylistId(value);
+    const playlistId = extractPlaylistId(resolved);
     if (!playlistId) {
       throw new DeezerApiException(`Could not extract a playlist id from '${playlistIdOrUrl}'`);
     }
 
     const csrfToken = await this.getCsrfToken();
     const url = `${GW_LIGHT_URL}?method=deezer.pagePlaylist&input=3&api_version=1.0&api_token=${encodeURIComponent(csrfToken)}`;
-
-    let body: PlaylistResponse;
-    try {
-      body = await this.http
+    const body = await describeFailure(`Could not load Deezer playlist ${playlistId}`, () =>
+      this.http
         .post(url, {
           json: {
             playlist_id: Number(playlistId),
@@ -501,15 +439,11 @@ export class DeezerClient {
             tab: 0,
             header: true,
             lang: 'de',
-            nb: 1_000_000,
+            nb: PLAYLIST_MAX_SONGS,
           },
         })
-        .json<PlaylistResponse>();
-    } catch (error) {
-      throw new DeezerApiException(`Could not load Deezer playlist ${playlistId}: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
+        .json<PlaylistResponse>(),
+    );
 
     if (body.error && body.error.length > 0) {
       throw new DeezerApiException(`Deezer API said: ${JSON.stringify(body.error)}`);
@@ -522,53 +456,34 @@ export class DeezerClient {
     }
 
     this.logger.info(
-      {
-        playlist: data.TITLE,
-        totalSongs: data.NB_SONG,
-        returnedSongs: songs.count,
-      },
+      { playlist: data.TITLE, totalSongs: data.NB_SONG, returnedSongs: songs.count },
       'fetched Deezer playlist',
     );
-
     return { name: data.TITLE, songs: songs.data ?? [] };
   }
 
-  private async getCsrfToken(): Promise<string> {
-    try {
-      const body = await this.http.post(USER_DATA_URL).json<UserDataResponse>();
-      const token = body.results?.checkForm;
-      if (!token) {
-        throw new DeezerApiException('Deezer did not return a CSRF token');
-      }
-      return token;
-    } catch (error) {
-      if (error instanceof DeezerApiException) {
-        throw error;
-      }
-      throw new DeezerApiException(`Could not retrieve a Deezer CSRF token: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
+  /** Returns the URL a short link finally redirects to. */
+  private async followRedirects(url: string): Promise<string> {
+    const response = await this.http.head(url, {
+      followRedirect: true,
+      throwHttpErrors: false,
+      timeout: { request: SHORT_LINK_TIMEOUT_MS },
+    });
+    return response.url;
   }
 
+  /** Returns the ids of every song a user has marked as a favorite. */
   public async getDeezerFavorites(userId: string): Promise<string[]> {
     if (!/^\d+$/.test(userId)) {
       throw new DeezerApiException(`User id '${userId}' must be numeric`);
     }
 
     const ids: string[] = [];
-    let url: string | undefined = `https://api.deezer.com/user/${userId}/tracks?limit=10000000000`;
+    let url: string | undefined = `${PUBLIC_API_URL}/user/${userId}/tracks?limit=${FAVORITES_PAGE_SIZE}`;
     let total = 0;
 
-    for (let page = 0; url && page < 1000; page += 1) {
-      let body: FavoritesResponse;
-      try {
-        body = await this.http.get(url).json<FavoritesResponse>();
-      } catch (error) {
-        throw new DeezerApiException(`Could not retrieve favorite songs for user ${userId}: ${errorMessage(error)}`, {
-          cause: error,
-        });
-      }
+    for (let page = 0; url && page < FAVORITES_MAX_PAGES; page += 1) {
+      const body = await this.fetchFavoritesPage(userId, url);
       if (body.error) {
         throw new DeezerApiException(`Upstream API error for user ${userId}: ${apiErrorText(body.error)}`);
       }
@@ -584,14 +499,22 @@ export class DeezerClient {
     return ids;
   }
 
+  private fetchFavoritesPage(userId: string, url: string): Promise<FavoritesResponse> {
+    return describeFailure(`Could not retrieve favorite songs for user ${userId}`, () =>
+      this.http.get(url).json<FavoritesResponse>(),
+    );
+  }
+
+  // --- Downloading -----------------------------------------------------------
+
+  /** Asks the media API where a song can be streamed from, and in which format. */
   public getSongUrl(trackToken: string): Promise<SongSource> {
     return this.withSessionRetry(() => this.getSongUrlOnce(trackToken));
   }
 
   private async getSongUrlOnce(trackToken: string): Promise<SongSource> {
-    let response: { statusCode: number; body: unknown };
-    try {
-      response = await this.http.post(MEDIA_URL, {
+    const response = await describeFailure('Could not retrieve song URL', () =>
+      this.http.post(MEDIA_URL, {
         json: {
           license_token: this.licenseToken,
           media: [
@@ -605,14 +528,10 @@ export class DeezerClient {
         headers: { 'user-agent': USER_AGENT },
         responseType: 'json',
         throwHttpErrors: false,
-      });
-    } catch (error) {
-      throw new DeezerApiException(`Could not retrieve song URL: ${errorMessage(error)}`, {
-        cause: error,
-      });
-    }
+      }),
+    );
 
-    const body = response.body as GetUrlResponse;
+    const body = response.body as MediaResponse;
     if (response.statusCode >= 400) {
       throw new DeezerApiException(`Could not retrieve song URL: HTTP ${response.statusCode} ${JSON.stringify(body)}`, {
         sessionRelated: response.statusCode === 401 || response.statusCode === 403,
@@ -626,7 +545,7 @@ export class DeezerClient {
     if (entry.errors && entry.errors.length > 0) {
       const message = entry.errors[0]?.message ?? 'unknown error';
       throw new DeezerApiException(`Could not get download URL from API: ${message}`, {
-        sessionRelated: /licen[cs]e|expired|session|auth/i.test(message),
+        sessionRelated: SESSION_ERROR_PATTERN.test(message),
       });
     }
 
@@ -638,14 +557,14 @@ export class DeezerClient {
       );
     }
 
-    const format = SOUND_FORMATS.find((candidate) => candidate === media?.format);
-    if (!format) {
+    if (!isSoundFormat(media?.format)) {
       this.logger.warn(
         { returned: media?.format, requested: this.soundFormats },
         'Deezer did not report the media format; assuming the preferred one',
       );
+      return { url, format: this.currentSoundFormat };
     }
-    return { url, format: format ?? this.currentSoundFormat };
+    return { url, format: media.format };
   }
 
   /**
@@ -653,104 +572,81 @@ export class DeezerClient {
    * extension the file needs, since Deezer may fall back to a lower quality.
    */
   public async downloadSong(song: DeezerSong, outputFile: string): Promise<DownloadedSong> {
-    let resolvedSong = song;
-    let source: SongSource;
+    const { song: resolvedSong, source } = await this.resolveSource(song);
+    const songId = resolvedSong.SNG_ID;
 
+    await this.streamToFile(resolvedSong, source, outputFile);
+    await this.tagSong(resolvedSong, source.format, outputFile);
+
+    if (source.format !== this.currentSoundFormat) {
+      this.logger.info(
+        { songId, preferred: this.currentSoundFormat, actual: source.format },
+        'song is not available in the preferred format; downloaded a lower quality',
+      );
+    }
+    this.logger.info({ file: outputFile, songId, format: source.format }, 'download finished');
+    return { format: source.format, extension: extensionForFormat(source.format) };
+  }
+
+  /** Finds a stream for the song, or for its fallback recording when the song itself is unavailable. */
+  private async resolveSource(song: DeezerSong): Promise<{ song: DeezerSong; source: SongSource }> {
     try {
-      source = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
+      return { song, source: await this.getSongUrl(song.TRACK_TOKEN) };
     } catch (error) {
-      if (!resolvedSong.FALLBACK) {
+      if (!song.FALLBACK) {
         throw error;
       }
-      this.logger.warn({ songId: resolvedSong.SNG_ID, err: error }, 'primary song unavailable, trying fallback');
-      resolvedSong = resolvedSong.FALLBACK;
-      source = await this.getSongUrl(resolvedSong.TRACK_TOKEN);
+      this.logger.warn({ songId: song.SNG_ID, err: error }, 'primary song unavailable, trying fallback');
+      return { song: song.FALLBACK, source: await this.getSongUrl(song.FALLBACK.TRACK_TOKEN) };
     }
+  }
 
-    const key = calcBfKey(resolvedSong.SNG_ID);
+  private async streamToFile(song: DeezerSong, source: SongSource, outputFile: string): Promise<void> {
+    const key = calcBfKey(song.SNG_ID);
     try {
       await pipeline(this.http.stream(source.url), createDecryptTransform(key), createWriteStream(outputFile));
     } catch (error) {
       await rm(outputFile, { force: true }).catch(() => undefined);
       throw new DeezerApiException(
-        `Could not write song to disk (https://www.deezer.com/track/${resolvedSong.SNG_ID}): ${errorMessage(error)}`,
+        `Could not write song to disk (${WEBSITE_URL}/track/${song.SNG_ID}): ${errorMessage(error)}`,
         { cause: error },
       );
     }
+  }
 
+  /** Tagging is best effort: a song without tags is still worth keeping. */
+  private async tagSong(song: DeezerSong, format: SoundFormat, outputFile: string): Promise<void> {
     // A missing cover must not prevent the title/artist/album tags.
-    const picture = await this.getCachedPicture(resolvedSong.ALB_PICTURE);
+    const picture = await this.getCachedPicture(song.ALB_PICTURE);
     try {
-      await writeSongMetadata(outputFile, resolvedSong, {
-        isFlac: source.format === 'FLAC',
+      await writeSongMetadata(outputFile, song, {
+        isFlac: format === 'FLAC',
         picture,
         metaflacPath: this.config.tools.metaflacPath,
       });
     } catch (error) {
-      this.logger.warn({ err: error, file: outputFile, songId: resolvedSong.SNG_ID }, 'could not write song metadata');
+      this.logger.warn({ err: error, file: outputFile, songId: song.SNG_ID }, 'could not write song metadata');
     }
-
-    if (source.format !== this.currentSoundFormat) {
-      this.logger.info(
-        { songId: resolvedSong.SNG_ID, preferred: this.currentSoundFormat, actual: source.format },
-        'song is not available in the preferred format; downloaded a lower quality',
-      );
-    }
-    this.logger.info({ file: outputFile, songId: resolvedSong.SNG_ID, format: source.format }, 'download finished');
-    return { format: source.format, extension: extensionForFormat(source.format) };
   }
 
-  /**
-   * Returns the album cover, or undefined if it cannot be downloaded. Covers
-   * are cached by picture id so an album fetches its cover only once; the
-   * in-flight promise is cached so concurrent workers share one request.
-   */
+  /** Returns the album cover, or undefined if it cannot be downloaded. */
   private getCachedPicture(pictureId: string | undefined): Promise<Buffer | undefined> {
     if (!pictureId) {
       return Promise.resolve(undefined);
     }
-    const cached = this.pictureCache.get(pictureId);
-    if (cached) {
-      // Refresh recency for LRU eviction.
-      this.pictureCache.delete(pictureId);
-      this.pictureCache.set(pictureId, cached);
-      return cached;
-    }
-
-    const pending = this.downloadPicture(pictureId).catch((error: unknown) => {
-      this.pictureCache.delete(pictureId);
-      this.logger.warn({ err: error, pictureId }, 'could not download cover; tagging without it');
-      return undefined;
-    });
-    this.pictureCache.set(pictureId, pending);
-    while (this.pictureCache.size > PICTURE_CACHE_SIZE) {
-      const oldest = this.pictureCache.keys().next().value;
-      if (oldest === undefined) {
-        break;
-      }
-      this.pictureCache.delete(oldest);
-    }
-    return pending;
+    return this.pictures.get(pictureId, () =>
+      this.downloadPicture(pictureId).catch((error: unknown) => {
+        // Do not remember the failure; the next song may have more luck.
+        this.pictures.delete(pictureId);
+        this.logger.warn({ err: error, pictureId }, 'could not download cover; tagging without it');
+        return undefined;
+      }),
+    );
   }
 
   public async downloadPicture(pictureId: string): Promise<Buffer> {
-    const url = `${COVER_BASE}/${pictureId}/1200x1200.jpg`;
-    try {
-      const data = await this.http.get(url).buffer();
-      return Buffer.from(data);
-    } catch (error) {
-      throw new DeezerApiException(`Could not download cover ${pictureId}: ${errorMessage(error)}`, { cause: error });
-    }
-  }
-
-  public async testLogin(): Promise<boolean> {
-    try {
-      const song = await this.getSongInfosFromWebsite(TYPE_TRACK, '917265');
-      this.logger.info({ songId: song.SNG_ID }, 'Deezer login is working');
-      return true;
-    } catch (error) {
-      this.logger.warn({ err: error }, 'Deezer login check failed');
-      return false;
-    }
+    const url = `${COVER_BASE_URL}/${pictureId}/${COVER_SIZE}.jpg`;
+    const data = await describeFailure(`Could not download cover ${pictureId}`, () => this.http.get(url).buffer());
+    return Buffer.from(data);
   }
 }
