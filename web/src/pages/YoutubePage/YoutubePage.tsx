@@ -58,8 +58,6 @@ export function YoutubePage() {
   return (
     <div>
       <PageHeader
-        index="02"
-        eyebrow="Video links"
         title={
           <>
             Rip the audio <em>from anywhere</em>

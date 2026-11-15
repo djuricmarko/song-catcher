@@ -25,9 +25,10 @@
   width: 1.0625rem;
   height: 1.0625rem;
   margin-top: 0.125rem;
-  border: 1.5px solid var(--line-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-xs);
-  background-color: var(--surface-raised);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-card);
   color: var(--on-signal);
   transition:
     background-color var(--dur) var(--ease),

@@ -6,8 +6,9 @@
   gap: 0.5rem;
   padding: 0 0.75rem;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-raised);
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-card);
   transition:
     border-color var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease);
@@ -15,22 +16,22 @@
 
 @media (hover: hover) {
   .field:hover {
-    border-color: var(--ink-muted);
+    border-color: color-mix(in oklab, var(--ink) 25%, var(--line-strong));
   }
 }
 
 .field:focus-within {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 3px var(--signal-soft);
+  border-color: color-mix(in oklab, var(--signal) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--signal) 18%, transparent);
 }
 
 .md {
-  height: 2.375rem;
+  height: 2.125rem;
   font-size: var(--text-sm);
 }
 
 .lg {
-  height: 2.875rem;
+  height: 2.5rem;
   font-size: var(--text-base);
 }
 

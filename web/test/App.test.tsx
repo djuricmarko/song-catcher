@@ -46,7 +46,7 @@ describe('App', () => {
     await userEvent.click(within(tabs).getByRole('link', { name: /Playlists/ }));
     expect(heading()).toHaveTextContent('Bring the whole crate');
 
-    await userEvent.click(screen.getByRole('link', { name: 'Logs' }));
+    await userEvent.click(within(main).getByRole('link', { name: 'Logs' }));
     expect(heading()).toHaveTextContent('Under the hood');
   });
 
