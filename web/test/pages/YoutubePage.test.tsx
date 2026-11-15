@@ -44,6 +44,80 @@ describe('YoutubePage', () => {
     expect(input).toHaveValue('');
   });
 
+  it('downloads a playlist link as a playlist', async () => {
+    let body: unknown;
+    const fetchMock = mockFetch({
+      'GET /config': config(true),
+      'POST /playlist/youtube': (init) => {
+        body = JSON.parse(String(init?.body));
+        return jsonResponse({ task_id: 9 });
+      },
+    });
+    renderWithProviders(<YoutubePage />);
+    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
+
+    const input = screen.getByLabelText('Video URL');
+    await userEvent.type(input, 'https://www.youtube.com/playlist?list=PL123');
+    // A playlist page has no single video, so there is nothing to choose.
+    expect(screen.queryByText('Download the entire playlist')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText('Pack into a zip'));
+    await userEvent.click(await screen.findByText('Add to MPD playlist'));
+    await userEvent.click(screen.getByRole('button', { name: /Extract playlist/ }));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Playlist queued', { description: 'Task #9' });
+    });
+    expect(body).toEqual({
+      url: 'https://www.youtube.com/playlist?list=PL123',
+      add_to_playlist: true,
+      create_zip: true,
+    });
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/youtubedl', expect.anything());
+    expect(input).toHaveValue('');
+    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
+  });
+
+  it('downloads only the video of a playlist link unless asked for the playlist', async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const record = (path: string) => (init?: RequestInit) => {
+      requests.push({ path, body: JSON.parse(String(init?.body)) });
+      return jsonResponse({ task_id: requests.length });
+    };
+    mockFetch({
+      'GET /config': config(false),
+      'POST /youtubedl': record('/youtubedl'),
+      'POST /playlist/youtube': record('/playlist/youtube'),
+    });
+    renderWithProviders(<YoutubePage />);
+    const link = 'https://www.youtube.com/watch?v=abc&list=PL123';
+    const input = screen.getByLabelText('Video URL');
+
+    await userEvent.type(input, link);
+    expect(screen.getByText('Download the entire playlist')).toBeInTheDocument();
+    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Extract' }));
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Download queued', { description: 'Task #1' });
+    });
+
+    await userEvent.type(input, link);
+    await userEvent.click(screen.getByText('Download the entire playlist'));
+    expect(screen.getByText('Pack into a zip')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Extract playlist/ }));
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Playlist queued', { description: 'Task #2' });
+    });
+
+    expect(requests).toEqual([
+      { path: '/youtubedl', body: { url: link, add_to_playlist: false } },
+      { path: '/playlist/youtube', body: { url: link, add_to_playlist: false, create_zip: false } },
+    ]);
+
+    // The choice does not carry over to the next link.
+    await userEvent.type(input, link);
+    expect(screen.getByRole('button', { name: 'Extract' })).toBeInTheDocument();
+  });
+
   it('shows API errors', async () => {
     mockFetch({
       'GET /config': config(false),

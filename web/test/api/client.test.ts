@@ -48,6 +48,12 @@ describe('api client', () => {
       { url: 'https://y', add_to_playlist: true },
     ],
     [
+      'startYoutubePlaylistDownload',
+      () => api.startYoutubePlaylistDownload('https://y/playlist?list=1', false, true),
+      '/api/playlist/youtube',
+      { url: 'https://y/playlist?list=1', add_to_playlist: false, create_zip: true },
+    ],
+    [
       'startPlaylistDownload',
       () => api.startPlaylistDownload('123', false, true),
       '/api/playlist/deezer',
