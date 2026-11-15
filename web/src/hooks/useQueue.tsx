@@ -3,15 +3,41 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { QueueTask } from '@song-catcher/shared';
 
 import { API_ROOT, getQueue } from '../api/client';
+import { errorMessage } from '../lib/errors';
 
 interface QueueState {
+  /** Every task the server knows about, oldest first. */
   tasks: QueueTask[];
+  /** False while the event stream is (re)connecting; `tasks` may then be stale. */
   connected: boolean;
+  /** Why the initial load failed, if it did and the stream has not delivered since. */
   error: string | null;
 }
 
 const QueueContext = createContext<QueueState | null>(null);
 
+/** The payload of a server-sent event, or undefined when it is malformed. */
+function parseEventData<T>(event: MessageEvent<string>): T | undefined {
+  try {
+    return JSON.parse(event.data) as T;
+  } catch {
+    // Ignore malformed events and wait for the next one.
+    return undefined;
+  }
+}
+
+/** Replaces the task with the same id, or appends it when it is new. */
+function upsertTask(tasks: QueueTask[], task: QueueTask): QueueTask[] {
+  const index = tasks.findIndex((candidate) => candidate.id === task.id);
+  if (index === -1) {
+    return [...tasks, task];
+  }
+  const next = [...tasks];
+  next[index] = task;
+  return next;
+}
+
+/** Keeps a live copy of the server's queue: one fetch to start with, then the event stream. */
 function useQueueStream(): QueueState {
   const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [connected, setConnected] = useState(false);
@@ -32,46 +58,36 @@ function useQueueStream(): QueueState {
       })
       .catch((loadError: unknown) => {
         if (active) {
-          setError(loadError instanceof Error ? loadError.message : String(loadError));
+          setError(errorMessage(loadError));
         }
       });
 
     const source = new EventSource(`${API_ROOT}/queue/events`);
 
+    // The whole queue, sent once when the stream (re)connects.
     const onSnapshot = (event: MessageEvent<string>) => {
-      try {
-        streamed = true;
-        setTasks(JSON.parse(event.data) as QueueTask[]);
+      streamed = true;
+      const snapshot = parseEventData<QueueTask[]>(event);
+      if (snapshot) {
+        setTasks(snapshot);
         setError(null);
-      } catch {
-        // Ignore malformed events and wait for the next one.
       }
     };
 
+    // One task that was added or changed.
     const onTask = (event: MessageEvent<string>) => {
-      try {
-        streamed = true;
-        const task = JSON.parse(event.data) as QueueTask;
-        setTasks((previous) => {
-          const index = previous.findIndex((candidate) => candidate.id === task.id);
-          if (index === -1) {
-            return [...previous, task];
-          }
-          const next = [...previous];
-          next[index] = task;
-          return next;
-        });
-      } catch {
-        // Ignore malformed events and wait for the next one.
+      streamed = true;
+      const task = parseEventData<QueueTask>(event);
+      if (task) {
+        setTasks((previous) => upsertTask(previous, task));
       }
     };
 
+    // A finished task that dropped out of the server's bounded history.
     const onRemoved = (event: MessageEvent<string>) => {
-      try {
-        const { id } = JSON.parse(event.data) as { id: number };
-        setTasks((previous) => previous.filter((task) => task.id !== id));
-      } catch {
-        // Ignore malformed events and wait for the next one.
+      const removed = parseEventData<{ id: number }>(event);
+      if (removed) {
+        setTasks((previous) => previous.filter((task) => task.id !== removed.id));
       }
     };
 

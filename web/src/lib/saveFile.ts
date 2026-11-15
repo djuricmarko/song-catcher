@@ -1,3 +1,5 @@
+import { fileExtension } from './paths';
+
 // Minimal typing for the File System Access API (not in TypeScript's DOM lib).
 interface SaveFilePickerOptions {
   suggestedName?: string;
@@ -47,7 +49,7 @@ export async function saveFile(url: string, fileName: string, onStart?: () => vo
     return 'fallback';
   }
 
-  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const extension = fileExtension(fileName);
   const mime = MIME_BY_EXTENSION[extension];
 
   let handle: SaveFileHandle;

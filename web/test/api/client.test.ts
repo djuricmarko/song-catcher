@@ -85,7 +85,7 @@ describe('api client', () => {
     mockFetch({
       'POST /search': () => jsonResponse({ error: 'Invalid', details: ['a', 'b'] }, { status: 400 }),
     });
-    await expect(api.searchMusic('x', 'y')).rejects.toThrow(/^Invalid: a, b$/);
+    await expect(api.searchMusic('track', 'y')).rejects.toThrow(/^Invalid: a, b$/);
   });
 
   it('falls back to the status line when the body has no error', async () => {

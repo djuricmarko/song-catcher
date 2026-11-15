@@ -3,6 +3,7 @@ import { Disc3, Download, ListMusic, Pause, Play, User } from 'lucide-react';
 import type { SearchResultDto } from '@song-catcher/shared';
 
 import { cn } from '../../lib/cn';
+import { formatIndex } from '../../lib/format';
 import { Button } from '../ui/Button';
 
 import styles from './SearchResultCard.module.css';
@@ -20,6 +21,7 @@ interface SearchResultCardProps {
   onArtistAlbums?: (result: SearchResultDto) => void;
 }
 
+/** Animated bars shown in place of the track number while its preview plays. */
 function Equalizer() {
   return (
     <span className={styles.eq} aria-hidden>
@@ -30,6 +32,7 @@ function Equalizer() {
   );
 }
 
+/** One search result: a row for a track, a tile for an album or artist. */
 export function SearchResultCard(props: SearchResultCardProps) {
   const { result } = props;
   if (result.id_type === 'track') {
@@ -43,7 +46,7 @@ function TrackRow({ result, index, busy, playing, onTogglePreview, onDownloadTra
 
   return (
     <div className={cn(styles.row, playing && styles.rowPlaying)}>
-      <span className={styles.index}>{playing ? <Equalizer /> : String(index + 1).padStart(2, '0')}</span>
+      <span className={styles.index}>{playing ? <Equalizer /> : formatIndex(index + 1)}</span>
 
       <div className={styles.thumb}>
         {result.img_url ? (
