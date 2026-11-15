@@ -3,6 +3,9 @@ productName: Song Catcher
 artifactName: song-catcher-${version}-${os}-${arch}.${ext}
 publish: null
 
+toolsets:
+  appimage: 1.0.3
+
 directories:
   output: release
 
