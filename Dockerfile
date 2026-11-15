@@ -8,14 +8,16 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
+COPY desktop/package.json desktop/
 
-RUN npm ci
+# The desktop workspace is only here to keep the lockfile in sync; the image never runs Electron.
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
 
 COPY shared shared
 COPY server server
 COPY web web
 
-RUN npm run build
+RUN npm run build -w @song-catcher/shared -w @song-catcher/server -w @song-catcher/web
 
 
 FROM node:24-alpine AS runtime
@@ -37,6 +39,7 @@ COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
 COPY web/package.json web/
+COPY desktop/package.json desktop/
 RUN npm ci --omit=dev --workspace @song-catcher/server \
     && npm cache clean --force
 

@@ -1,0 +1,444 @@
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
+
+import type { QueueTask } from '@song-catcher/shared';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  session,
+  shell,
+  type IpcMainInvokeEvent,
+  type MenuItemConstructorOptions,
+} from 'electron';
+
+import type { SaveResult, SettingsState } from './bridge.js';
+import { EmbeddedServer, type StartedServer } from './embedded-server.js';
+import { loadSettings, saveSettings, secretsEncrypted } from './settings-store.js';
+import {
+  defaultSettings,
+  serverEnvironment,
+  settingsIssues,
+  settingsSchema,
+  type Settings,
+  type ToolPaths,
+} from './settings.js';
+import { downloadYtDlp } from './tool-assets.js';
+import { builderPlatform, executableName, locateTools, searchDirectories } from './tools.js';
+
+const isMac = process.platform === 'darwin';
+const userData = app.getPath('userData');
+const settingsFile = path.join(userData, 'settings.json');
+const userBin = path.join(userData, 'bin');
+const userYtDlp = path.join(userBin, executableName('yt-dlp'));
+const bundledBin = app.isPackaged
+  ? path.join(process.resourcesPath, 'bin')
+  : path.join(import.meta.dirname, '../vendor', `${builderPlatform()}-${process.arch}`);
+const webRoot = app.isPackaged
+  ? path.join(process.resourcesPath, 'web')
+  : path.join(import.meta.dirname, '../../web/dist');
+
+const LOGIN_REJECTED =
+  'Deezer did not accept the ARL cookie, so Deezer downloads will fail. Paste a fresh one from your browser. ' +
+  'YouTube downloads keep working.';
+
+let settings: Settings;
+let mainWindow: BrowserWindow | undefined;
+let settingsWindow: BrowserWindow | undefined;
+let settingsNotice: string | undefined;
+let quitConfirmed = false;
+
+const server = new EmbeddedServer(() => {
+  if (quitConfirmed) {
+    return;
+  }
+  openSettings('The download service stopped unexpectedly. Save to start it again.');
+  mainWindow?.destroy();
+});
+
+function toolDirectories(): string[] {
+  return [userBin, bundledBin, ...searchDirectories(process.env.PATH)];
+}
+
+function findTools(): ToolPaths {
+  return locateTools(toolDirectories());
+}
+
+function seedYtDlp(): void {
+  const bundled = path.join(bundledBin, executableName('yt-dlp'));
+  if (existsSync(userYtDlp) || !existsSync(bundled)) {
+    return;
+  }
+  mkdirSync(userBin, { recursive: true });
+  copyFileSync(bundled, userYtDlp);
+}
+
+async function startServer(): Promise<StartedServer> {
+  const started = await server.start((port) =>
+    serverEnvironment(
+      settings,
+      {
+        tools: findTools(),
+        searchPath: toolDirectories().join(path.delimiter),
+        webRoot,
+        logFile: path.join(app.getPath('logs'), 'song-catcher.log'),
+        port,
+        password: server.password,
+        version: app.getVersion(),
+      },
+      process.env,
+    ),
+  );
+
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${started.origin}/*`] }, (details, callback) => {
+    callback({ requestHeaders: { ...details.requestHeaders, Authorization: server.authorization } });
+  });
+  return started;
+}
+
+async function pendingDownloads(): Promise<number> {
+  if (!server.origin) {
+    return 0;
+  }
+  try {
+    const response = await fetch(`${server.origin}/api/queue`, { headers: { Authorization: server.authorization } });
+    const tasks = (await response.json()) as QueueTask[];
+    return tasks.filter((task) => task.state === 'active' || task.state === 'waiting').length;
+  } catch {
+    return 0;
+  }
+}
+
+function openExternal(url: string): void {
+  if (/^https?:\/\//i.test(url)) {
+    void shell.openExternal(url);
+  }
+}
+
+function showMainWindow(origin: string): void {
+  if (mainWindow) {
+    void mainWindow.loadURL(`${origin}/`);
+    mainWindow.focus();
+    return;
+  }
+
+  const window = new BrowserWindow({
+    width: 1180,
+    height: 800,
+    minWidth: 380,
+    minHeight: 520,
+    show: false,
+    title: 'Song Catcher',
+    icon: path.join(webRoot, 'icon-512.png'),
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  mainWindow = window;
+
+  window.once('ready-to-show', () => {
+    window.show();
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).origin !== server.origin) {
+      event.preventDefault();
+      openExternal(url);
+    }
+  });
+  window.on('close', (event) => {
+    if (quitConfirmed) {
+      return;
+    }
+    event.preventDefault();
+    void pendingDownloads().then((count) => {
+      const stay =
+        count > 0 &&
+        dialog.showMessageBoxSync(window, {
+          type: 'question',
+          buttons: ['Keep downloading', 'Quit'],
+          defaultId: 0,
+          cancelId: 0,
+          message: count === 1 ? '1 download is still in progress' : `${count} downloads are still in progress`,
+          detail: 'Quitting now stops them.',
+        }) === 0;
+      if (!stay) {
+        quitConfirmed = true;
+        app.quit();
+      }
+    });
+  });
+  window.on('closed', () => {
+    mainWindow = undefined;
+  });
+
+  void window.loadURL(`${origin}/`);
+}
+
+function openSettings(notice?: string): void {
+  settingsNotice = notice;
+  if (settingsWindow) {
+    settingsWindow.reload();
+    settingsWindow.focus();
+    return;
+  }
+
+  const window = new BrowserWindow({
+    width: 620,
+    height: 780,
+    minWidth: 480,
+    minHeight: 520,
+    show: false,
+    title: 'Song Catcher Settings',
+    icon: path.join(webRoot, 'icon-512.png'),
+    webPreferences: {
+      preload: path.join(import.meta.dirname, 'preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWindow = window;
+  window.removeMenu();
+
+  window.once('ready-to-show', () => {
+    window.show();
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
+  window.on('closed', () => {
+    settingsWindow = undefined;
+  });
+
+  void window.loadFile(path.join(import.meta.dirname, 'settings/index.html'));
+}
+
+async function launch(): Promise<void> {
+  if (!settings.arl) {
+    openSettings('Enter your Deezer ARL cookie to get started.');
+    return;
+  }
+  try {
+    const { origin, loggedIn } = await startServer();
+    showMainWindow(origin);
+    if (!loggedIn) {
+      openSettings(LOGIN_REJECTED);
+    }
+  } catch (error) {
+    openSettings(startupFailure(error));
+  }
+}
+
+function startupFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replaceAll('DEEZER_COOKIE_ARL', 'the ARL cookie');
+}
+
+function fromSettingsWindow(event: IpcMainInvokeEvent): boolean {
+  return event.sender === settingsWindow?.webContents;
+}
+
+function registerSettingsIpc(): void {
+  ipcMain.handle('settings:load', async (event): Promise<SettingsState | undefined> => {
+    if (!fromSettingsWindow(event)) {
+      return undefined;
+    }
+    const tools = findTools();
+    return {
+      settings,
+      notice: settingsNotice,
+      tools: {
+        'yt-dlp': tools['yt-dlp'] !== undefined,
+        ffmpeg: tools.ffmpeg !== undefined,
+        metaflac: tools.metaflac !== undefined,
+      },
+      secretsEncrypted: await secretsEncrypted(),
+    };
+  });
+
+  ipcMain.handle('settings:save', async (event, input: unknown): Promise<SaveResult> => {
+    if (!fromSettingsWindow(event)) {
+      return { ok: false, message: 'Settings can only be saved from the settings window.' };
+    }
+    const parsed = settingsSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, message: settingsIssues(parsed.error) };
+    }
+    if (!parsed.data.arl) {
+      return { ok: false, message: 'Enter your Deezer ARL cookie.' };
+    }
+
+    settings = parsed.data;
+    await saveSettings(settingsFile, settings);
+    try {
+      const { origin, loggedIn } = await startServer();
+      showMainWindow(origin);
+      if (!loggedIn) {
+        settingsWindow?.focus();
+        return { ok: false, message: LOGIN_REJECTED };
+      }
+    } catch (error) {
+      mainWindow?.destroy();
+      return { ok: false, message: startupFailure(error) };
+    }
+    settingsWindow?.close();
+    return { ok: true };
+  });
+
+  ipcMain.handle('settings:choose-directory', async (event, current: unknown): Promise<string | undefined> => {
+    if (!settingsWindow || !fromSettingsWindow(event)) {
+      return undefined;
+    }
+    const { filePaths } = await dialog.showOpenDialog(settingsWindow, {
+      title: 'Choose the download folder',
+      defaultPath: typeof current === 'string' ? current : undefined,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return filePaths[0];
+  });
+
+  ipcMain.on('settings:close', (event) => {
+    if (event.sender === settingsWindow?.webContents) {
+      settingsWindow.close();
+    }
+  });
+}
+
+async function updateYtDlp(): Promise<void> {
+  const usedBefore = findTools()['yt-dlp'];
+  try {
+    await downloadYtDlp(userYtDlp, process.platform, process.arch);
+  } catch (error) {
+    dialog.showErrorBox('Could not update yt-dlp', error instanceof Error ? error.message : String(error));
+    return;
+  }
+  await dialog.showMessageBox({
+    type: 'info',
+    message: 'yt-dlp is up to date',
+    detail:
+      usedBefore === userYtDlp
+        ? 'The next YouTube download uses the new version.'
+        : 'Restart Song Catcher to use the new version.',
+  });
+}
+
+function buildMenu(): Menu {
+  const settingsItem: MenuItemConstructorOptions = {
+    label: 'Settings…',
+    accelerator: 'CmdOrCtrl+,',
+    click: () => {
+      openSettings();
+    },
+  };
+  const appItems: MenuItemConstructorOptions[] = [
+    {
+      label: 'Open Downloads Folder',
+      click: () => {
+        void shell.openPath(settings.downloadDir);
+      },
+    },
+    {
+      label: 'Update yt-dlp',
+      click: () => {
+        void updateYtDlp();
+      },
+    },
+  ];
+
+  return Menu.buildFromTemplate([
+    ...(isMac
+      ? [
+          {
+            role: 'appMenu',
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              settingsItem,
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          } satisfies MenuItemConstructorOptions,
+        ]
+      : []),
+    {
+      label: 'File',
+      submenu: isMac ? appItems : [settingsItem, ...appItems, { type: 'separator' }, { role: 'quit' }],
+    },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    // On Windows and Linux the window menu would bind Ctrl+M, which the web UI uses to focus search.
+    ...(isMac ? [{ role: 'windowMenu' } satisfies MenuItemConstructorOptions] : []),
+  ]);
+}
+
+function restrictPermissions(): void {
+  const allowed = new Set(['clipboard-read', 'clipboard-sanitized-write', 'fileSystem']);
+  const fromApp = (url: string) =>
+    server.origin !== undefined && (url === server.origin || url.startsWith(`${server.origin}/`));
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(allowed.has(permission) && fromApp(webContents.getURL()));
+  });
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission, origin) => allowed.has(permission) && fromApp(origin),
+  );
+}
+
+if (app.requestSingleInstanceLock()) {
+  app.on('second-instance', () => {
+    const window = mainWindow ?? settingsWindow;
+    if (window?.isMinimized()) {
+      window.restore();
+    }
+    window?.focus();
+  });
+
+  app.on('window-all-closed', () => {
+    quitConfirmed = true;
+    app.quit();
+  });
+
+  app.on('will-quit', (event) => {
+    if (server.running) {
+      event.preventDefault();
+      void server.stop().finally(() => {
+        app.quit();
+      });
+    }
+  });
+
+  void app.whenReady().then(async () => {
+    settings = await loadSettings(settingsFile, defaultSettings(path.join(app.getPath('music'), 'Song Catcher')));
+    seedYtDlp();
+    restrictPermissions();
+    registerSettingsIpc();
+    Menu.setApplicationMenu(buildMenu());
+    await launch();
+  });
+} else {
+  app.quit();
+}

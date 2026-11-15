@@ -112,6 +112,29 @@ describe('health and config', () => {
   });
 });
 
+describe('web app location', () => {
+  it('serves the web app from a custom directory', async () => {
+    const webRoot = path.join(baseDirectory, 'web');
+    await mkdir(webRoot);
+    await writeFile(path.join(webRoot, 'index.html'), '<html><head></head><body>packaged</body></html>');
+    const packagedApp = await createServer(
+      config,
+      logger,
+      { deezer: createFakeDeezer(), scheduler, downloads: {} as DownloadService },
+      webRoot,
+    );
+
+    try {
+      const response = await packagedApp.inject({ method: 'GET', url: '/' });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('packaged');
+      expect(response.body).toContain('window.__APP_CONFIG__');
+    } finally {
+      await packagedApp.close();
+    }
+  });
+});
+
 describe('downloads static files', () => {
   it('serves files inside the download directory and blocks symlink escapes', async () => {
     const outside = await mkdtemp(path.join(tmpdir(), 'deezer-api-outside-'));

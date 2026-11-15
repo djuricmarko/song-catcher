@@ -9,7 +9,8 @@
   "workspaces": [
     "shared",
     "server",
-    "web"
+    "web",
+    "desktop"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
@@ -19,6 +20,8 @@
     "start": "concurrently -n server,web -c blue,magenta \"npm:start:server\" \"npm:start:web\"",
     "start:server": "npm run start -w @song-catcher/server",
     "start:web": "npm run preview -w @song-catcher/web",
+    "desktop": "npm run build && npm run start -w @song-catcher/desktop",
+    "desktop:dist": "npm run build && npm run fetch-tools -w @song-catcher/desktop && npm run dist -w @song-catcher/desktop",
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",

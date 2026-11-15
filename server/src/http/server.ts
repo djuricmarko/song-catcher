@@ -36,7 +36,7 @@ function registerSystemRoutes(app: ApiFastifyInstance, config: AppConfig): void 
   }
 }
 
-export async function createServer(config: AppConfig, logger: Logger, services: ApiServices) {
+export async function createServer(config: AppConfig, logger: Logger, services: ApiServices, webRoot?: string) {
   const app = Fastify({
     loggerInstance: logger,
     trustProxy: false,
@@ -54,7 +54,7 @@ export async function createServer(config: AppConfig, logger: Logger, services: 
 
   registerSystemRoutes(app, config);
   registerApiRoutes(app, config, services);
-  const indexPage = await registerWebApp(app, prefix);
+  const indexPage = await registerWebApp(app, prefix, webRoot);
   await registerDownloads(app, config.downloads.baseDir, prefix);
 
   app.setNotFoundHandler((request, reply) => {

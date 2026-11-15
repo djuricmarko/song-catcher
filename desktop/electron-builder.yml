@@ -1,0 +1,45 @@
+appId: io.github.djuricmarko.song-catcher
+productName: Song Catcher
+artifactName: song-catcher-${version}-${os}-${arch}.${ext}
+publish: null
+
+directories:
+  output: release
+
+files:
+  - dist/**
+  - package.json
+  - '!dist/**/*.map'
+
+extraResources:
+  - from: ../web/dist
+    to: web
+    filter:
+      - '!**/*.map'
+  - from: vendor/${os}-${arch}
+    to: bin
+
+linux:
+  target:
+    - AppImage
+    - tar.gz
+  category: AudioVideo
+  executableName: song-catcher
+  syncDesktopName: true
+  icon: ../web/public/icon-512.png
+  synopsis: Download music from Deezer and YouTube
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.music
+  icon: ../web/public/icon-512.png
+
+win:
+  target: nsis
+  icon: ../web/public/icon-512.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

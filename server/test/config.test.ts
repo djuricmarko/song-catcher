@@ -1,8 +1,8 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigError, loadConfig, normalizeUrlPrefix, redactConfig } from '../src/config/env.js';
 import { checkEnvironment, isLoopbackHost, resolveExecutable } from '../src/config/preflight.js';
@@ -231,6 +231,18 @@ describe('resolveExecutable', () => {
 
   it('returns undefined for a missing executable', () => {
     expect(resolveExecutable('/definitely/not/here')).toBeUndefined();
+  });
+
+  it('finds a bare command by its .exe name on Windows', async () => {
+    const directory = await makeTempDirectory();
+    await writeFile(path.join(directory, 'yt-dlp.exe'), '', { mode: 0o755 });
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+    try {
+      expect(resolveExecutable('yt-dlp', directory)).toBe(path.join(directory, 'yt-dlp.exe'));
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 
