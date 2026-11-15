@@ -1,23 +1,28 @@
-import { ArrowLeft, ArrowRight, Download, Search } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowRight, Search } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
-import type { SearchResultDto } from '@song-catcher/shared';
+import type { SearchResultDto, SearchType } from '@song-catcher/shared';
 
 import { searchMusic, startDownload } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
-import { SearchResultCard } from '../../components/SearchResultCard';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
 import { Panel } from '../../components/ui/Panel';
 import { Segmented } from '../../components/ui/Segmented';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { useEnqueue } from '../../hooks/useEnqueue';
+import { usePreviewPlayer } from '../../hooks/usePreviewPlayer';
 import { dismissKeyboard } from '../../lib/dismissKeyboard';
+import { errorMessage } from '../../lib/errors';
+import { AlbumTracklist, type AlbumTracks } from './AlbumTracklist';
+import { SearchResults } from './SearchResults';
 
 import styles from './SearchPage.module.css';
 
+/** What the search field looks for; drill-downs into an album or artist use other search types. */
 type SearchMode = 'track' | 'album' | 'artist';
 
 const SEARCH_MODES: Array<{ value: SearchMode; label: string }> = [
@@ -26,10 +31,16 @@ const SEARCH_MODES: Array<{ value: SearchMode; label: string }> = [
   { value: 'artist', label: 'Artists' },
 ];
 
-interface AlbumTracks {
-  albumId: number;
-  title: string;
-  tracks: SearchResultDto[];
+const PLACEHOLDERS: Record<SearchMode, string> = {
+  track: 'Search for a track…',
+  album: 'Search for an album…',
+  artist: 'Search for an artist…',
+};
+
+/** Deezer ids are positive integers; returns undefined for anything else. */
+function parseDeezerId(value: string | number): number | undefined {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
 export function SearchPage() {
@@ -38,169 +49,151 @@ export function SearchPage() {
   const [mode, setMode] = useState<SearchMode>('track');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultDto[]>([]);
+  /** Set while the tracklist of one album is shown in place of the results. */
   const [albumTracks, setAlbumTracks] = useState<AlbumTracks | null>(null);
   const [searching, setSearching] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  /** True once a search has finished, so "no results" is not shown on a fresh page. */
+  const [searched, setSearched] = useState(false);
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
-  const [searched, setSearched] = useState(false);
   // Incremented per search; responses from superseded searches are dropped
   // so a slow earlier request cannot overwrite newer results.
   const latestSearch = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  // Bumped on every play/pause so a late play() rejection for a preview the
-  // user has already paused or replaced is ignored.
-  const previewAttempt = useRef(0);
+  const preview = usePreviewPlayer();
+  const { busy: downloading, enqueue } = useEnqueue();
 
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-    };
-  }, []);
+  /** Runs a search and hands the results to `onFound`, unless a newer search has started meanwhile. */
+  async function search(type: SearchType, searchQuery: string, onFound: (found: SearchResultDto[]) => void) {
+    const searchId = ++latestSearch.current;
+    const isLatest = () => searchId === latestSearch.current;
 
-  function togglePreview(result: SearchResultDto) {
-    if (!result.preview_url) {
-      return;
-    }
-    if (!audioRef.current) {
-      const audio = new Audio();
-      audio.addEventListener('ended', () => {
-        setPlayingUrl(null);
-      });
-      audioRef.current = audio;
-    }
-    const audio = audioRef.current;
-    if (playingUrl === result.preview_url) {
-      previewAttempt.current++;
-      audio.pause();
-      setPlayingUrl(null);
-      return;
-    }
-    const url = result.preview_url;
-    audio.src = url;
-    setPlayingUrl(url);
-
-    // The first fetch of a preview that is cold on Deezer's CDN can make the
-    // initial play() reject even though the file is fine; one reload + retry
-    // succeeds. Rejections for a source the user has since switched away from
-    // (AbortError, or a newer play/pause) are ignored so they cannot clear the newly
-    // playing track or show a bogus error.
-    const attempt = ++previewAttempt.current;
-    const isCurrent = () => previewAttempt.current === attempt;
-    const fail = (error: unknown) => {
-      if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) {
-        return;
+    setSearching(true);
+    try {
+      const found = await searchMusic(type, searchQuery);
+      if (isLatest()) {
+        onFound(found);
       }
-      console.error('Preview playback failed', error);
-      setPlayingUrl(null);
-      toast.error('Could not play the preview');
-    };
-    audio.play().catch((error: unknown) => {
-      if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) {
-        return;
+    } catch (error) {
+      if (isLatest()) {
+        toast.error(errorMessage(error));
       }
-      console.warn('Preview playback failed, retrying once', error);
-      audio.load();
-      audio.play().catch(fail);
-    });
+    } finally {
+      if (isLatest()) {
+        setSearching(false);
+      }
+    }
   }
 
-  async function runSearch(
-    searchType: SearchMode | 'album_track' | 'artist_top' | 'artist_album',
-    searchQuery: string,
-  ) {
+  function runSearch(type: SearchType, searchQuery: string) {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
       toast.error('Enter a search query first');
       return;
     }
 
-    const searchId = ++latestSearch.current;
-    setSearching(true);
-    try {
-      const found = await searchMusic(searchType, trimmed);
-      if (searchId !== latestSearch.current) {
-        return;
-      }
+    void search(type, trimmed, (found) => {
       setResults(found);
       setSearched(true);
       if (found.length === 0) {
         toast.info('No results found');
       }
-    } catch (error) {
-      if (searchId === latestSearch.current) {
-        toast.error(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      if (searchId === latestSearch.current) {
-        setSearching(false);
-      }
-    }
+    });
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAlbumTracks(null);
     dismissKeyboard();
-    void runSearch(mode, query);
+    runSearch(mode, query);
   }
 
-  async function queueDownload(type: 'track' | 'album', musicId: number | string) {
-    const numericId = Number(musicId);
-    if (!Number.isInteger(numericId) || numericId <= 0) {
-      toast.error('This result has no valid Deezer id');
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      const task = await startDownload({
-        type,
-        music_id: numericId,
-        add_to_playlist: addToPlaylist,
-        create_zip: createZip,
-      });
-      toast.success('Download queued', { description: `Task #${task.task_id}` });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  async function showAlbumTracks(result: SearchResultDto) {
-    const albumId = Number(result.album_id || result.id);
-    if (!Number.isInteger(albumId) || albumId <= 0) {
+  function showAlbumTracks(result: SearchResultDto) {
+    const albumId = parseDeezerId(result.album_id || result.id);
+    if (albumId === undefined) {
       toast.error('This album has no valid Deezer id');
       return;
     }
 
-    const searchId = ++latestSearch.current;
-    setSearching(true);
-    try {
-      const tracks = await searchMusic('album_track', String(albumId));
-      if (searchId !== latestSearch.current) {
-        return;
-      }
+    void search('album_track', String(albumId), (tracks) => {
       setAlbumTracks({
         albumId,
         title: result.album || result.title || `Album ${albumId}`,
         tracks,
       });
-    } catch (error) {
-      if (searchId === latestSearch.current) {
-        toast.error(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      if (searchId === latestSearch.current) {
-        setSearching(false);
-      }
+    });
+  }
+
+  /** Lists what belongs to an artist: their top tracks or their albums. */
+  function showArtist(type: 'artist_top' | 'artist_album', result: SearchResultDto) {
+    setAlbumTracks(null);
+    runSearch(type, result.id);
+  }
+
+  function queueDownload(type: 'track' | 'album', musicId: number | string) {
+    const id = parseDeezerId(musicId);
+    if (id === undefined) {
+      toast.error('This result has no valid Deezer id');
+      return;
     }
+
+    void enqueue(() => startDownload({ type, music_id: id, add_to_playlist: addToPlaylist, create_zip: createZip }), {
+      successMessage: 'Download queued',
+    });
   }
 
   const busy = searching || downloading;
-  const tileResults = results.length > 0 && results[0]?.id_type !== 'track';
+
+  function renderResults() {
+    if (albumTracks) {
+      return (
+        <AlbumTracklist
+          album={albumTracks}
+          busy={busy}
+          downloading={downloading}
+          preview={preview}
+          onBack={() => {
+            setAlbumTracks(null);
+          }}
+          onDownloadAlbum={(albumId) => {
+            queueDownload('album', albumId);
+          }}
+          onDownloadTrack={(track) => {
+            queueDownload('track', track.id);
+          }}
+        />
+      );
+    }
+    if (results.length > 0) {
+      return (
+        <SearchResults
+          results={results}
+          busy={busy}
+          preview={preview}
+          onDownloadTrack={(result) => {
+            queueDownload('track', result.id);
+          }}
+          onDownloadAlbum={(result) => {
+            queueDownload('album', result.album_id || result.id);
+          }}
+          onShowAlbumTracks={showAlbumTracks}
+          onArtistTop={(result) => {
+            showArtist('artist_top', result);
+          }}
+          onArtistAlbums={(result) => {
+            showArtist('artist_album', result);
+          }}
+        />
+      );
+    }
+    if (searched && !searching) {
+      return (
+        <EmptyState title="Nothing on this tape">
+          Try a different spelling, or switch between tracks, albums and artists.
+        </EmptyState>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className={styles.page}>
@@ -228,13 +221,7 @@ export function SearchPage() {
             }}
             leading={<Search size={18} aria-hidden />}
             trailing={<kbd className={styles.kbd}>Ctrl M</kbd>}
-            placeholder={
-              mode === 'artist'
-                ? 'Search for an artist…'
-                : mode === 'album'
-                  ? 'Search for an album…'
-                  : 'Search for a track…'
-            }
+            placeholder={PLACEHOLDERS[mode]}
             aria-label="Search query"
             type="search"
             enterKeyHint="search"
@@ -256,93 +243,7 @@ export function SearchPage() {
         </div>
       </Panel>
 
-      {albumTracks ? (
-        <section className={styles.resultsSection}>
-          <div className={styles.sectionHeader}>
-            <Button
-              size="sm"
-              variant="quiet"
-              onClick={() => {
-                setAlbumTracks(null);
-              }}
-            >
-              <ArrowLeft size={12} aria-hidden />
-              Back to results
-            </Button>
-          </div>
-          <div className={styles.albumHead}>
-            <div>
-              <p className={styles.sectionLabel}>Tracklist · {albumTracks.tracks.length} songs</p>
-              <h2 className={styles.albumTitle}>{albumTracks.title}</h2>
-            </div>
-            <Button
-              disabled={downloading}
-              onClick={() => {
-                void queueDownload('album', albumTracks.albumId);
-              }}
-            >
-              <Download size={16} aria-hidden />
-              Download album
-            </Button>
-          </div>
-          <div className={styles.trackList}>
-            {albumTracks.tracks.map((track, index) => (
-              <SearchResultCard
-                key={`album-track-${track.id}`}
-                index={index}
-                result={track}
-                busy={busy}
-                playing={playingUrl !== null && playingUrl === track.preview_url}
-                onTogglePreview={togglePreview}
-                onDownloadTrack={(item) => {
-                  void queueDownload('track', item.id);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      ) : results.length > 0 ? (
-        <section className={styles.resultsSection}>
-          <div className={styles.sectionHeader}>
-            <p className={styles.sectionLabel}>Results</p>
-            <span className={styles.sectionRule} aria-hidden />
-            <p className={styles.sectionLabel}>{results.length} found</p>
-          </div>
-          <div className={tileResults ? styles.tileGrid : styles.trackList}>
-            {results.map((result, index) => (
-              <SearchResultCard
-                key={`${result.id_type}-${result.id}`}
-                index={index}
-                result={result}
-                busy={busy}
-                playing={playingUrl !== null && playingUrl === result.preview_url}
-                onTogglePreview={togglePreview}
-                onDownloadTrack={(item) => {
-                  void queueDownload('track', item.id);
-                }}
-                onDownloadAlbum={(item) => {
-                  void queueDownload('album', item.album_id || item.id);
-                }}
-                onShowAlbumTracks={(item) => {
-                  void showAlbumTracks(item);
-                }}
-                onArtistTop={(item) => {
-                  setAlbumTracks(null);
-                  void runSearch('artist_top', item.id);
-                }}
-                onArtistAlbums={(item) => {
-                  setAlbumTracks(null);
-                  void runSearch('artist_album', item.id);
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      ) : searched && !searching ? (
-        <EmptyState title="Nothing on this tape">
-          Try a different spelling, or switch between tracks, albums and artists.
-        </EmptyState>
-      ) : null}
+      {renderResults()}
     </div>
   );
 }

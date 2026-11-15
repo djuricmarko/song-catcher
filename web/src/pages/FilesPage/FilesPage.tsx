@@ -4,40 +4,35 @@ import type { MouseEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import type { FileEntry } from '@song-catcher/shared';
+
 import { downloadUrl, getFiles } from '../../api/client';
 import { Alert } from '../../components/Alert';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
+import { errorMessage } from '../../lib/errors';
+import { formatFileSize, pluralize } from '../../lib/format';
+import { encodePath, fileExtension } from '../../lib/paths';
 import { saveFile } from '../../lib/saveFile';
 
 import styles from './FilesPage.module.css';
 
-function formatSize(bytes: number): string {
-  if (bytes <= 0) {
-    return '';
-  }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+const AUDIO_EXTENSIONS = new Set(['mp3', 'flac', 'm3u8']);
+const SKELETON_ROWS = 5;
 
-function fileIcon(name: string) {
-  const extension = name.split('.').pop()?.toLowerCase();
+function FileIcon({ name }: { name: string }) {
+  const extension = fileExtension(name);
   if (extension === 'zip') {
     return <FileArchive size={18} strokeWidth={1.5} className={styles.iconArchive} aria-hidden />;
   }
-  if (extension === 'mp3' || extension === 'flac' || extension === 'm3u8') {
+  if (AUDIO_EXTENSIONS.has(extension)) {
     return <FileAudio size={18} strokeWidth={1.5} className={styles.iconAudio} aria-hidden />;
   }
   return <File size={18} strokeWidth={1.5} className={styles.iconFile} aria-hidden />;
 }
 
+/** Saves a file through the "save as" dialog where the browser has one, reporting progress as a toast. */
 async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: string, fileName: string) {
   // Let modified clicks (new tab, etc.) keep their normal link behaviour.
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
@@ -54,23 +49,54 @@ async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: strin
       toast.success('Saved', { id: toastId, description: fileName });
     }
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : String(error), { id: toastId });
+    toast.error(errorMessage(error), { id: toastId });
   }
 }
 
+/** The route that shows the directory at `path`, which is relative to the download folder. */
 function filesRoute(path: string): string {
-  if (!path) {
-    return '/files';
-  }
-  return `/files/${path
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/')}`;
+  return path ? `/files/${encodePath(path)}` : '/files';
+}
+
+function DirectoryRow({ entry }: { entry: FileEntry }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      className={styles.entry}
+      onClick={() => {
+        navigate(filesRoute(entry.path));
+      }}
+    >
+      <Folder size={18} strokeWidth={1.5} className={styles.iconFolder} aria-hidden />
+      <span className={styles.directoryName}>{entry.name}</span>
+      <ChevronRight size={16} className={styles.entryTrail} aria-hidden />
+    </button>
+  );
+}
+
+function FileRow({ entry }: { entry: FileEntry }) {
+  return (
+    <a
+      href={downloadUrl(entry.path)}
+      download={entry.name}
+      className={styles.entry}
+      title={`Download ${entry.name}`}
+      onClick={(event) => {
+        void onFileClick(event, entry.path, entry.name);
+      }}
+    >
+      <FileIcon name={entry.name} />
+      <span className={styles.fileName}>{entry.name}</span>
+      <span className={styles.fileSize}>{formatFileSize(entry.size)}</span>
+      <Download size={15} className={styles.entryTrail} aria-hidden />
+    </a>
+  );
 }
 
 export function FilesPage() {
   const params = useParams();
-  const navigate = useNavigate();
+  // The part of the URL after /files/ is the directory being shown.
   const currentPath = params['*'] ?? '';
 
   const files = useQuery({
@@ -87,6 +113,34 @@ export function FilesPage() {
   const entries = files.data?.entries ?? [];
   const folderCount = entries.filter((entry) => entry.isDirectory).length;
   const fileCount = entries.length - folderCount;
+
+  function renderListing() {
+    if (files.isLoading) {
+      return (
+        <div className={styles.listing}>
+          {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+            <div key={index} className={styles.skeleton} />
+          ))}
+        </div>
+      );
+    }
+    if (entries.length > 0) {
+      return (
+        <ul className={styles.listing}>
+          {entries.map((entry) => (
+            <li key={`${entry.isDirectory ? 'd' : 'f'}-${entry.path}-${entry.name}`}>
+              {entry.isDirectory ? <DirectoryRow entry={entry} /> : <FileRow entry={entry} />}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    if (files.data) {
+      return <EmptyState title="This shelf is empty">Downloads show up here as soon as they finish.</EmptyState>;
+    }
+    // Loading failed; the alert above says why.
+    return null;
+  }
 
   return (
     <div>
@@ -132,7 +186,7 @@ export function FilesPage() {
         </nav>
         {files.data ? (
           <p className={styles.counts}>
-            {folderCount} {folderCount === 1 ? 'folder' : 'folders'} · {fileCount} {fileCount === 1 ? 'file' : 'files'}
+            {pluralize(folderCount, 'folder')} · {pluralize(fileCount, 'file')}
           </p>
         ) : null}
       </div>
@@ -141,50 +195,7 @@ export function FilesPage() {
         <Alert>Could not list files: {files.error instanceof Error ? files.error.message : 'unknown error'}</Alert>
       ) : null}
 
-      {files.isLoading ? (
-        <div className={styles.listing}>
-          {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className={styles.skeleton} />
-          ))}
-        </div>
-      ) : files.data && entries.length === 0 ? (
-        <EmptyState title="This shelf is empty">Downloads show up here as soon as they finish.</EmptyState>
-      ) : entries.length > 0 ? (
-        <ul className={styles.listing}>
-          {entries.map((entry) => (
-            <li key={`${entry.isDirectory ? 'd' : 'f'}-${entry.path}-${entry.name}`}>
-              {entry.isDirectory ? (
-                <button
-                  type="button"
-                  className={styles.entry}
-                  onClick={() => {
-                    navigate(filesRoute(entry.path));
-                  }}
-                >
-                  <Folder size={18} strokeWidth={1.5} className={styles.iconFolder} aria-hidden />
-                  <span className={styles.directoryName}>{entry.name}</span>
-                  <ChevronRight size={16} className={styles.entryTrail} aria-hidden />
-                </button>
-              ) : (
-                <a
-                  href={downloadUrl(entry.path)}
-                  download={entry.name}
-                  className={styles.entry}
-                  title={`Download ${entry.name}`}
-                  onClick={(event) => {
-                    void onFileClick(event, entry.path, entry.name);
-                  }}
-                >
-                  {fileIcon(entry.name)}
-                  <span className={styles.fileName}>{entry.name}</span>
-                  <span className={styles.fileSize}>{formatSize(entry.size)}</span>
-                  <Download size={15} className={styles.entryTrail} aria-hidden />
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {renderListing()}
     </div>
   );
 }

@@ -4,12 +4,13 @@ import { toast } from 'sonner';
 
 import { startYoutubeDownload, startYoutubePlaylistDownload } from '../../api/client';
 import { PageHeader } from '../../components/PageHeader';
+import { PasteButton } from '../../components/PasteButton';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
-import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { useEnqueue } from '../../hooks/useEnqueue';
 import { dismissKeyboard } from '../../lib/dismissKeyboard';
 import { playlistLinkKind } from '../../lib/playlistUrl';
 
@@ -25,7 +26,7 @@ export function YoutubePage() {
   const [createZip, setCreateZip] = useState(false);
   // Only meaningful for a video opened from a playlist; a playlist page is always downloaded whole.
   const [entirePlaylist, setEntirePlaylist] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, enqueue } = useEnqueue();
 
   const linkKind = playlistLinkKind(url);
   const playlistMode = linkKind === 'playlist' || (linkKind === 'video' && entirePlaylist);
@@ -38,7 +39,7 @@ export function YoutubePage() {
     setUrl(next);
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = url.trim();
     if (!trimmed.startsWith('http')) {
@@ -47,20 +48,15 @@ export function YoutubePage() {
     }
 
     dismissKeyboard();
-    setBusy(true);
-    try {
-      const task = playlistMode
-        ? await startYoutubePlaylistDownload(trimmed, addToPlaylist, createZip)
-        : await startYoutubeDownload(trimmed, addToPlaylist);
-      toast.success(playlistMode ? 'Playlist queued' : 'Download queued', {
-        description: `Task #${task.task_id}`,
-      });
-      changeUrl('');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
+    const start = playlistMode
+      ? () => startYoutubePlaylistDownload(trimmed, addToPlaylist, createZip)
+      : () => startYoutubeDownload(trimmed, addToPlaylist);
+    void enqueue(start, {
+      successMessage: playlistMode ? 'Playlist queued' : 'Download queued',
+      onQueued: () => {
+        changeUrl('');
+      },
+    });
   }
 
   return (
