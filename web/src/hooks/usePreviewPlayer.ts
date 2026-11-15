@@ -87,5 +87,5 @@ export function usePreviewPlayer() {
     return playingUrl !== null && playingUrl === url;
   }
 
-  return { toggle, toggleResult, isPlaying };
+  return { toggleResult, isPlaying };
 }
