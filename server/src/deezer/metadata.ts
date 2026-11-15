@@ -6,15 +6,14 @@ import { promisify } from 'node:util';
 
 import NodeID3 from 'node-id3';
 
+import { childEnvironment, childStderr } from '../lib/child-process.js';
 import type { DeezerSong } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
-function childEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  delete env.DEEZER_COOKIE_ARL;
-  return env;
-}
+const METAFLAC_MAX_BUFFER = 1024 * 1024;
+/** ID3 picture type 3, the front cover. */
+const ID3_FRONT_COVER = { id: 3, name: 'front cover' };
 
 export interface MetadataOptions {
   isFlac: boolean;
@@ -30,6 +29,17 @@ export class MetadataError extends Error {
   }
 }
 
+/** The tags written to every file, in the vocabulary shared by ID3 and Vorbis comments. */
+interface SongTags {
+  artist: string | undefined;
+  title: string | undefined;
+  album: string | undefined;
+  trackNumber: string | undefined;
+  discNumber: string | undefined;
+  albumArtist: string | undefined;
+  year: string | undefined;
+}
+
 function releaseYear(song: DeezerSong): string | undefined {
   const date = song.PHYSICAL_RELEASE_DATE;
   if (typeof date !== 'string' || date.length < 4) {
@@ -42,28 +52,42 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
 }
 
-export async function writeSongMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
-  if (options.isFlac) {
-    await writeFlacMetadata(outputFile, song, options);
-    return;
-  }
-  await writeMp3Metadata(outputFile, song, options);
-}
-
-async function writeMp3Metadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
-  const tags: NodeID3.Tags = {
+function songTags(song: DeezerSong): SongTags {
+  return {
     artist: nonEmpty(song.ART_NAME),
     title: nonEmpty(song.SNG_TITLE),
     album: nonEmpty(song.ALB_TITLE),
     trackNumber: nonEmpty(song.TRACK_NUMBER),
-    partOfSet: nonEmpty(song.DISK_NUMBER),
-    performerInfo: nonEmpty(song.ALB_ART_NAME || song.ART_NAME),
+    discNumber: nonEmpty(song.DISK_NUMBER),
+    albumArtist: nonEmpty(song.ALB_ART_NAME || song.ART_NAME),
     year: releaseYear(song),
+  };
+}
+
+/** Writes title, artist, album, numbering, year and cover into a downloaded song. */
+export async function writeSongMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
+  const tags = songTags(song);
+  if (options.isFlac) {
+    await writeFlacMetadata(outputFile, tags, options);
+    return;
+  }
+  await writeMp3Metadata(outputFile, tags, options);
+}
+
+async function writeMp3Metadata(outputFile: string, songTags: SongTags, options: MetadataOptions): Promise<void> {
+  const tags: NodeID3.Tags = {
+    artist: songTags.artist,
+    title: songTags.title,
+    album: songTags.album,
+    trackNumber: songTags.trackNumber,
+    partOfSet: songTags.discNumber,
+    performerInfo: songTags.albumArtist,
+    year: songTags.year,
     ...(options.picture
       ? {
           image: {
             mime: 'image/jpeg',
-            type: { id: 3, name: 'front cover' },
+            type: ID3_FRONT_COVER,
             description: 'Cover',
             imageBuffer: options.picture,
           },
@@ -86,22 +110,23 @@ async function writeMp3Metadata(outputFile: string, song: DeezerSong, options: M
   }
 }
 
-async function writeFlacMetadata(outputFile: string, song: DeezerSong, options: MetadataOptions): Promise<void> {
+async function writeFlacMetadata(outputFile: string, songTags: SongTags, options: MetadataOptions): Promise<void> {
+  // metaflac can only import a cover from a file.
   const temporaryDirectory = options.picture ? await mkdtemp(path.join(tmpdir(), 'deezer-cover-')) : undefined;
 
   try {
-    const tags: Array<[string, string | undefined]> = [
-      ['ARTIST', nonEmpty(song.ART_NAME)],
-      ['TITLE', nonEmpty(song.SNG_TITLE)],
-      ['ALBUM', nonEmpty(song.ALB_TITLE)],
-      ['TRACKNUMBER', nonEmpty(song.TRACK_NUMBER)],
-      ['DISCNUMBER', nonEmpty(song.DISK_NUMBER)],
-      ['ALBUMARTIST', nonEmpty(song.ALB_ART_NAME || song.ART_NAME)],
-      ['DATE', releaseYear(song)],
+    const vorbisComments: Array<[string, string | undefined]> = [
+      ['ARTIST', songTags.artist],
+      ['TITLE', songTags.title],
+      ['ALBUM', songTags.album],
+      ['TRACKNUMBER', songTags.trackNumber],
+      ['DISCNUMBER', songTags.discNumber],
+      ['ALBUMARTIST', songTags.albumArtist],
+      ['DATE', songTags.year],
     ];
 
     const args = ['--remove-all-tags'];
-    for (const [key, value] of tags) {
+    for (const [key, value] of vorbisComments) {
       if (value) {
         args.push(`--set-tag=${key}=${value}`);
       }
@@ -115,13 +140,12 @@ async function writeFlacMetadata(outputFile: string, song: DeezerSong, options: 
 
     try {
       await execFileAsync(options.metaflacPath, args, {
-        maxBuffer: 1024 * 1024,
+        maxBuffer: METAFLAC_MAX_BUFFER,
         env: childEnvironment(),
       });
     } catch (error) {
-      const stderr = typeof error === 'object' && error !== null && 'stderr' in error ? String(error.stderr) : '';
       throw new MetadataError(
-        `Could not write FLAC metadata with ${options.metaflacPath}: ${stderr || String(error)}`,
+        `Could not write FLAC metadata with ${options.metaflacPath}: ${childStderr(error) || String(error)}`,
         { cause: error },
       );
     }

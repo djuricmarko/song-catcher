@@ -1,6 +1,9 @@
 import type { QueueTask, TaskState } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
+import { errorMessage } from '../lib/errors.js';
+
+/** What a running task can tell the queue about itself. */
 export interface TaskContext {
   reportProgress(current: number, maximum: number): void;
   /** Records a non-fatal problem; the task can still succeed. */
@@ -12,32 +15,24 @@ export type TaskArgs = Record<string, unknown>;
 /** Maps handler names to the argument shape each handler receives. */
 export type TaskArgsMap = Record<string, TaskArgs>;
 
+/** Carries out one kind of task and resolves to the files it produced. */
 export type TaskHandler<Args extends TaskArgs = TaskArgs> = (args: Args, context: TaskContext) => Promise<string[]>;
 
 export type TaskListener = (task: QueueTask) => void;
 export type TaskRemovedListener = (taskId: number) => void;
 
-interface InternalTask {
-  id: number;
-  description: string;
+/** A task as the scheduler keeps it; clients only ever see copies without the handler name. */
+interface InternalTask extends QueueTask {
   handlerName: string;
-  args: Record<string, unknown>;
-  state: TaskState;
-  result: string[] | null;
-  exception: string | null;
-  warnings: string[];
-  progress: [number, number];
-  workerIndex: number | null;
-  tsQueued: number;
-  tsStarted: number;
-  tsFinished: number;
 }
+
+const FINISHED_STATES: readonly TaskState[] = ['mission accomplished', 'failed'];
 
 /**
  * In-memory worker pool with a bounded history of processed tasks. It mirrors
  * the semantics of the old Python ThreadpoolScheduler while using async tasks.
- */
-/**
+ *
+ * Tasks run in the order they were enqueued, at most `workerCount` at a time.
  * `Tasks` ties each handler name to its argument type, so `register` and
  * `enqueue` are checked against each other at compile time.
  */
@@ -57,6 +52,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     private readonly logger: Logger,
   ) {}
 
+  /** Declares how tasks named `handlerName` are carried out. Each name can be registered once. */
   public register<Name extends keyof Tasks & string>(handlerName: Name, handler: TaskHandler<Tasks[Name]>): void {
     if (this.handlers.has(handlerName)) {
       throw new Error(`Task handler already registered: ${handlerName}`);
@@ -65,6 +61,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.handlers.set(handlerName, handler as TaskHandler);
   }
 
+  /** Starts the workers. Calling it again has no effect. */
   public start(): void {
     if (this.workers.length > 0) {
       return;
@@ -112,6 +109,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.logger.info('download workers stopped');
   }
 
+  /** Adds a task to the end of the queue and returns a snapshot of it. */
   public enqueue<Name extends keyof Tasks & string>(
     description: string,
     handlerName: Name,
@@ -146,6 +144,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     return this.snapshot(task);
   }
 
+  /** Snapshots of every task that is waiting, running or still in the history, oldest first. */
   public getTasks(): QueueTask[] {
     return this.tasks.map((task) => this.snapshot(task));
   }
@@ -220,7 +219,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
         task.state = 'mission accomplished';
       } catch (error) {
         task.state = 'failed';
-        task.exception = error instanceof Error ? error.message : String(error);
+        task.exception = errorMessage(error);
         this.logger.error({ err: error, taskId: task.id, handler: task.handlerName }, 'download task failed');
       } finally {
         task.tsFinished = Date.now();
@@ -230,36 +229,36 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     }
   }
 
+  /** Drops the oldest finished tasks until the list fits the history limit. Unfinished tasks always stay. */
   private trimHistory(): void {
     while (this.tasks.length > this.historyLimit) {
-      const index = this.tasks.findIndex((task) => task.state === 'mission accomplished' || task.state === 'failed');
+      const index = this.tasks.findIndex((task) => FINISHED_STATES.includes(task.state));
       if (index === -1) {
         return;
       }
       const [removed] = this.tasks.splice(index, 1);
       if (removed) {
-        for (const listener of this.removedListeners) {
-          try {
-            listener(removed.id);
-          } catch (error) {
-            this.logger.warn({ err: error }, 'queue listener failed');
-          }
-        }
+        this.emit(this.removedListeners, removed.id);
       }
     }
   }
 
   private notify(task: InternalTask): void {
-    const snapshot = this.snapshot(task);
-    for (const listener of this.listeners) {
+    this.emit(this.listeners, this.snapshot(task));
+  }
+
+  /** Calls every listener; one that throws must not stop the others or the worker. */
+  private emit<Payload>(listeners: ReadonlySet<(payload: Payload) => void>, payload: Payload): void {
+    for (const listener of listeners) {
       try {
-        listener(snapshot);
+        listener(payload);
       } catch (error) {
         this.logger.warn({ err: error }, 'queue listener failed');
       }
     }
   }
 
+  /** A copy that is safe to hand out: later changes to the task do not show through. */
   private snapshot(task: InternalTask): QueueTask {
     return {
       id: task.id,

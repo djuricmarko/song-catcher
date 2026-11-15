@@ -3,6 +3,9 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { childEnvironment, childStderr, wasKilled } from '../lib/child-process.js';
+import { errorMessage } from '../lib/errors.js';
+
 const execFileAsync = promisify(execFile);
 
 /** A stuck yt-dlp must not occupy a download worker forever. */
@@ -11,14 +14,11 @@ export const DEFAULT_YTDLP_TIMEOUT_MS = 30 * 60_000;
 /** Listing a playlist downloads nothing, so it gets a much shorter leash. */
 export const DEFAULT_YTDLP_LIST_TIMEOUT_MS = 5 * 60_000;
 
+/** yt-dlp prints little when downloading one song; this only guards against runaway output. */
+const DOWNLOAD_MAX_BUFFER = 16 * 1024 * 1024;
+
 /** Flat playlist JSON carries thumbnails per entry and grows quickly. */
 const LIST_MAX_BUFFER = 64 * 1024 * 1024;
-
-function childEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  delete env.DEEZER_COOKIE_ARL;
-  return env;
-}
 
 export class YoutubeDlError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -36,17 +36,22 @@ export interface YoutubeDlOptions {
   timeoutMs?: number;
 }
 
+function isAbsolutePath(line: string): boolean {
+  return line.startsWith('/') || /^[A-Za-z]:\\/.test(line);
+}
+
+/**
+ * Finds the finished MP3 in yt-dlp's output: the last absolute path it
+ * printed (from `--print after_move:filepath`), else the file named on a
+ * `Destination:` progress line.
+ */
 export function parseYtDlpOutput(stdout: string): string | undefined {
-  const lines = stdout
+  const printedPath = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index];
-    if (line && line.endsWith('.mp3') && (line.startsWith('/') || /^[A-Za-z]:\\/.test(line))) {
-      return line;
-    }
+    .findLast((line) => line.endsWith('.mp3') && isAbsolutePath(line));
+  if (printedPath) {
+    return printedPath;
   }
 
   const destination = /Destination:\s(.*\.mp3)/.exec(stdout);
@@ -76,23 +81,19 @@ async function runYtDlp(
       killSignal: 'SIGKILL',
     });
   } catch (error) {
-    if (typeof error === 'object' && error !== null && 'killed' in error && error.killed) {
+    if (wasKilled(error)) {
       throw new YoutubeDlError(`yt-dlp did not finish within ${Math.round(timeoutMs / 1000)} s`, {
         cause: error,
       });
     }
-    const details =
-      typeof error === 'object' && error !== null && 'stderr' in error
-        ? String(error.stderr)
-        : error instanceof Error
-          ? error.message
-          : String(error);
+    const details = childStderr(error) ?? errorMessage(error);
     throw new YoutubeDlError(`yt-dlp failed. You may have to update it.\n${details}`, {
       cause: error,
     });
   }
 }
 
+/** Downloads the audio of one URL as an MP3 into `destinationDirectory` and returns the file's path. */
 export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<string> {
   // A literal % in the directory (e.g. a playlist called "100% hits") would
   // otherwise be read as an output template field.
@@ -125,7 +126,7 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     options.executable,
     args,
     options.timeoutMs ?? DEFAULT_YTDLP_TIMEOUT_MS,
-    16 * 1024 * 1024,
+    DOWNLOAD_MAX_BUFFER,
   );
 
   const filename = parseYtDlpOutput(stdout);

@@ -3,8 +3,9 @@ import path from 'node:path';
 
 import type { FileEntry, FilesResponse } from '@song-catcher/shared';
 
-import { isPathInside } from '../config/env.js';
+import { isPathInside, toPosixPath } from '../lib/paths.js';
 
+/** A listing request that is refused; `statusCode` is the HTTP status to answer with. */
 export class FileAccessError extends Error {
   public constructor(
     message: string,
@@ -15,10 +16,13 @@ export class FileAccessError extends Error {
   }
 }
 
-function toPosix(value: string): string {
-  return value.split(path.sep).join('/');
-}
-
+/**
+ * Lists one directory below `baseDirectory`. `requestedPath` is relative to
+ * it and comes straight from the client, so it is checked twice: as written,
+ * and again after resolving symlinks.
+ *
+ * Directories come first, then files, each sorted by name.
+ */
 export async function listFiles(baseDirectory: string, requestedPath: string): Promise<FilesResponse> {
   if (requestedPath.includes('\0')) {
     throw new FileAccessError('invalid path', 400);
@@ -53,7 +57,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
     const parent = path.dirname(target);
     entries.push({
       name: '..',
-      path: toPosix(path.relative(resolvedBase, parent)),
+      path: toPosixPath(path.relative(resolvedBase, parent)),
       isDirectory: true,
       size: 0,
     });
@@ -77,7 +81,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
     }
     entries.push({
       name: entry.name,
-      path: toPosix(path.relative(resolvedBase, absolute)),
+      path: toPosixPath(path.relative(resolvedBase, absolute)),
       isDirectory,
       size,
     });
@@ -91,7 +95,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
   });
 
   return {
-    path: toPosix(path.relative(resolvedBase, target)),
+    path: toPosixPath(path.relative(resolvedBase, target)),
     entries,
   };
 }
