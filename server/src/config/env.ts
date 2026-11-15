@@ -1,11 +1,14 @@
-import { accessSync, constants as fsConstants } from 'node:fs';
-import { access, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 
-export type Quality = 'mp3' | 'flac';
-export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
+import { isPathInside } from '../lib/paths.js';
+
+const QUALITIES = ['mp3', 'flac'] as const;
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const;
+
+export type Quality = (typeof QUALITIES)[number];
+export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export interface AppConfig {
   deezer: {
@@ -17,7 +20,6 @@ export interface AppConfig {
     host: string;
     port: number;
     urlPrefix: string;
-    /** HTTP Basic credentials; undefined disables authentication. */
     auth: { user: string; password: string } | undefined;
   };
   downloads: {
@@ -33,7 +35,6 @@ export interface AppConfig {
     historyLimit: number;
   };
   youtube: {
-    /** Upper bound of songs taken from one playlist. */
     playlistMaxEntries: number;
   };
   mpd: {
@@ -59,15 +60,6 @@ export interface LoadConfigOptions {
   cwd?: string;
 }
 
-export interface EnvironmentReport {
-  errors: string[];
-  warnings: string[];
-  tools: Record<ToolName, string | undefined>;
-  directories: string[];
-}
-
-export type ToolName = 'ytDlp' | 'ffmpeg' | 'metaflac';
-
 export class ConfigError extends Error {
   public readonly issues: string[];
 
@@ -78,13 +70,14 @@ export class ConfigError extends Error {
   }
 }
 
-const DEFAULT_DOWNLOAD_DIR = '/tmp/deezer-downloader';
-
 const envText = (fallback = '') =>
   z
     .string()
     .default(fallback)
     .transform((value) => value.trim());
+
+const requiredEnvText = (fallback: string) =>
+  envText(fallback).refine((value) => value.length > 0, 'must not be empty');
 
 const optionalEnvText = z
   .string()
@@ -98,10 +91,10 @@ const envBoolean = z.preprocess((value) => {
   if (value === undefined || value === '') {
     return false;
   }
-  if (typeof value === 'boolean') {
+  if (typeof value !== 'string') {
     return value;
   }
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = value.trim().toLowerCase();
   if (['true', '1', 'yes', 'on'].includes(normalized)) {
     return true;
   }
@@ -117,17 +110,12 @@ const envInteger = (fallback: number, min: number, max: number) =>
     z.number().int().min(min).max(max),
   );
 
-const envQuality = z
-  .string()
-  .default('mp3')
-  .transform((value) => value.trim().toLowerCase())
-  .pipe(z.enum(['mp3', 'flac']));
-
-const envLogLevel = z
-  .string()
-  .default('info')
-  .transform((value) => value.trim().toLowerCase())
-  .pipe(z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']));
+const envEnum = <const Values extends readonly [string, ...string[]]>(values: Values, fallback: Values[number]) =>
+  z
+    .string()
+    .default(fallback)
+    .transform((value) => value.trim().toLowerCase())
+    .pipe(z.enum(values));
 
 export function normalizeUrlPrefix(value: string): string {
   const trimmed = value.trim();
@@ -137,14 +125,14 @@ export function normalizeUrlPrefix(value: string): string {
   return `/${trimmed.replace(/^\/+|\/+$/g, '')}`;
 }
 
-const rawSchema = z.object({
+const envSchema = z.object({
   DEEZER_COOKIE_ARL: z.string().trim().min(1, 'must not be empty'),
-  DEEZER_QUALITY: envQuality,
+  DEEZER_QUALITY: envEnum(QUALITIES, 'mp3'),
   DEEZER_PROXY_URL: envText().refine(
     (value) => value === '' || /^(https:\/\/|socks5h?:\/\/)/.test(value),
     'must start with https://, socks5:// or socks5h://',
   ),
-  DEEZER_HTTP_HOST: envText('127.0.0.1').refine((value) => value.length > 0, 'must not be empty'),
+  DEEZER_HTTP_HOST: requiredEnvText('127.0.0.1'),
   DEEZER_HTTP_PORT: envInteger(5000, 1, 65535),
   DEEZER_URL_PREFIX: envText()
     .transform(normalizeUrlPrefix)
@@ -157,7 +145,7 @@ const rawSchema = z.object({
     .transform((value) => (value ? value : undefined)),
   DEEZER_WORKERS: envInteger(4, 1, 32),
   DEEZER_TASK_HISTORY: envInteger(500, 10, 10000),
-  DEEZER_DOWNLOAD_DIR: envText(DEFAULT_DOWNLOAD_DIR).refine((value) => value.length > 0, 'must not be empty'),
+  DEEZER_DOWNLOAD_DIR: requiredEnvText('/tmp/deezer-downloader'),
   DEEZER_SONGS_DIR: optionalEnvText,
   DEEZER_ALBUMS_DIR: optionalEnvText,
   DEEZER_PLAYLISTS_DIR: optionalEnvText,
@@ -165,16 +153,18 @@ const rawSchema = z.object({
   DEEZER_YOUTUBE_DIR: optionalEnvText,
   DEEZER_YOUTUBE_PLAYLIST_MAX: envInteger(500, 1, 10000),
   DEEZER_MPD_ENABLED: envBoolean,
-  DEEZER_MPD_HOST: envText('localhost').refine((value) => value.length > 0, 'must not be empty'),
+  DEEZER_MPD_HOST: requiredEnvText('localhost'),
   DEEZER_MPD_PORT: envInteger(6600, 1, 65535),
   DEEZER_MPD_MUSIC_DIR_ROOT: optionalEnvText,
-  DEEZER_YTDLP_PATH: envText('yt-dlp').refine((value) => value.length > 0, 'must not be empty'),
-  DEEZER_FFMPEG_PATH: envText('ffmpeg').refine((value) => value.length > 0, 'must not be empty'),
-  DEEZER_METAFLAC_PATH: envText('metaflac').refine((value) => value.length > 0, 'must not be empty'),
-  DEEZER_LOG_LEVEL: envLogLevel,
+  DEEZER_YTDLP_PATH: requiredEnvText('yt-dlp'),
+  DEEZER_FFMPEG_PATH: requiredEnvText('ffmpeg'),
+  DEEZER_METAFLAC_PATH: requiredEnvText('metaflac'),
+  DEEZER_LOG_LEVEL: envEnum(LOG_LEVELS, 'info'),
   DEEZER_LOG_FILE: optionalEnvText,
   DEEZER_DEBUG_COMMAND: optionalEnvText,
 });
+
+type RawEnv = z.infer<typeof envSchema>;
 
 function expandHome(input: string): string {
   if (input === '~') {
@@ -186,13 +176,17 @@ function expandHome(input: string): string {
   return input;
 }
 
-export function resolvePath(input: string, cwd: string): string {
+function resolvePath(input: string, cwd: string): string {
   return path.resolve(cwd, expandHome(input.trim()));
 }
 
-export function isPathInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+function deepFreeze<T extends object>(value: T): T {
+  for (const nested of Object.values(value)) {
+    if (typeof nested === 'object' && nested !== null) {
+      deepFreeze(nested);
+    }
+  }
+  return Object.freeze(value);
 }
 
 function formatZodIssues(env: NodeJS.ProcessEnv, issues: z.core.$ZodIssue[]): string[] {
@@ -206,39 +200,31 @@ function formatZodIssues(env: NodeJS.ProcessEnv, issues: z.core.$ZodIssue[]): st
   return [...new Set(messages)];
 }
 
-/**
- * Pure configuration loader. It validates and normalizes environment variables
- * but does not touch the filesystem.
- */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadConfigOptions = {}): AppConfig {
-  const cwd = options.cwd ?? process.cwd();
-  const parsed = rawSchema.safeParse(env);
-  if (!parsed.success) {
-    throw new ConfigError(formatZodIssues(env, parsed.error.issues));
-  }
-
-  const raw = parsed.data;
+function resolveDownloadDirectories(raw: RawEnv, cwd: string): AppConfig['downloads'] {
   const baseDir = resolvePath(raw.DEEZER_DOWNLOAD_DIR, cwd);
-  const downloads = {
+  const subdirectory = (override: string | undefined, defaultName: string): string =>
+    override ? resolvePath(override, cwd) : path.join(baseDir, defaultName);
+
+  return {
     baseDir,
-    songsDir: raw.DEEZER_SONGS_DIR ? resolvePath(raw.DEEZER_SONGS_DIR, cwd) : path.join(baseDir, 'songs'),
-    albumsDir: raw.DEEZER_ALBUMS_DIR ? resolvePath(raw.DEEZER_ALBUMS_DIR, cwd) : path.join(baseDir, 'albums'),
-    playlistsDir: raw.DEEZER_PLAYLISTS_DIR
-      ? resolvePath(raw.DEEZER_PLAYLISTS_DIR, cwd)
-      : path.join(baseDir, 'playlists'),
-    zipsDir: raw.DEEZER_ZIPS_DIR ? resolvePath(raw.DEEZER_ZIPS_DIR, cwd) : path.join(baseDir, 'zips'),
-    youtubeDir: raw.DEEZER_YOUTUBE_DIR ? resolvePath(raw.DEEZER_YOUTUBE_DIR, cwd) : path.join(baseDir, 'youtube-dl'),
+    songsDir: subdirectory(raw.DEEZER_SONGS_DIR, 'songs'),
+    albumsDir: subdirectory(raw.DEEZER_ALBUMS_DIR, 'albums'),
+    playlistsDir: subdirectory(raw.DEEZER_PLAYLISTS_DIR, 'playlists'),
+    zipsDir: subdirectory(raw.DEEZER_ZIPS_DIR, 'zips'),
+    youtubeDir: subdirectory(raw.DEEZER_YOUTUBE_DIR, 'youtube-dl'),
   };
+}
 
-  const musicDirRoot = raw.DEEZER_MPD_MUSIC_DIR_ROOT ? resolvePath(raw.DEEZER_MPD_MUSIC_DIR_ROOT, cwd) : undefined;
-
+function crossFieldIssues(raw: RawEnv, downloads: AppConfig['downloads'], musicDirRoot: string | undefined): string[] {
   const issues: string[] = [];
+
   if (Boolean(raw.DEEZER_AUTH_USER) !== Boolean(raw.DEEZER_AUTH_PASSWORD)) {
     issues.push('DEEZER_AUTH_USER and DEEZER_AUTH_PASSWORD must be set together');
   }
   if (raw.DEEZER_AUTH_USER?.includes(':')) {
     issues.push('DEEZER_AUTH_USER must not contain ":"');
   }
+
   if (raw.DEEZER_MPD_ENABLED) {
     if (!musicDirRoot) {
       issues.push('DEEZER_MPD_MUSIC_DIR_ROOT is required when DEEZER_MPD_ENABLED=true');
@@ -250,49 +236,64 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
       }
     }
   }
+  return issues;
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadConfigOptions = {}): AppConfig {
+  const cwd = options.cwd ?? process.cwd();
+  const parsed = envSchema.safeParse(env);
+  if (!parsed.success) {
+    throw new ConfigError(formatZodIssues(env, parsed.error.issues));
+  }
+
+  const raw = parsed.data;
+  const downloads = resolveDownloadDirectories(raw, cwd);
+  const musicDirRoot = raw.DEEZER_MPD_MUSIC_DIR_ROOT ? resolvePath(raw.DEEZER_MPD_MUSIC_DIR_ROOT, cwd) : undefined;
+
+  const issues = crossFieldIssues(raw, downloads, musicDirRoot);
   if (issues.length > 0) {
     throw new ConfigError(issues);
   }
 
-  return Object.freeze({
-    deezer: Object.freeze({
+  return deepFreeze<AppConfig>({
+    deezer: {
       cookieArl: raw.DEEZER_COOKIE_ARL,
       quality: raw.DEEZER_QUALITY,
       proxyUrl: raw.DEEZER_PROXY_URL,
-    }),
-    http: Object.freeze({
+    },
+    http: {
       host: raw.DEEZER_HTTP_HOST,
       port: raw.DEEZER_HTTP_PORT,
       urlPrefix: raw.DEEZER_URL_PREFIX,
       auth:
         raw.DEEZER_AUTH_USER && raw.DEEZER_AUTH_PASSWORD
-          ? Object.freeze({ user: raw.DEEZER_AUTH_USER, password: raw.DEEZER_AUTH_PASSWORD })
+          ? { user: raw.DEEZER_AUTH_USER, password: raw.DEEZER_AUTH_PASSWORD }
           : undefined,
-    }),
-    downloads: Object.freeze(downloads),
-    queue: Object.freeze({
+    },
+    downloads,
+    queue: {
       workers: raw.DEEZER_WORKERS,
       historyLimit: raw.DEEZER_TASK_HISTORY,
-    }),
-    youtube: Object.freeze({
+    },
+    youtube: {
       playlistMaxEntries: raw.DEEZER_YOUTUBE_PLAYLIST_MAX,
-    }),
-    mpd: Object.freeze({
+    },
+    mpd: {
       enabled: raw.DEEZER_MPD_ENABLED,
       host: raw.DEEZER_MPD_HOST,
       port: raw.DEEZER_MPD_PORT,
       musicDirRoot,
-    }),
-    tools: Object.freeze({
+    },
+    tools: {
       ytdlpPath: raw.DEEZER_YTDLP_PATH,
       ffmpegPath: raw.DEEZER_FFMPEG_PATH,
       metaflacPath: raw.DEEZER_METAFLAC_PATH,
-    }),
-    logging: Object.freeze({
+    },
+    logging: {
       level: raw.DEEZER_LOG_LEVEL,
       file: raw.DEEZER_LOG_FILE ? resolvePath(raw.DEEZER_LOG_FILE, cwd) : undefined,
       debugCommand: raw.DEEZER_DEBUG_COMMAND,
-    }),
+    },
     isProduction: env.NODE_ENV === 'production',
   });
 }
@@ -309,99 +310,4 @@ export function redactConfig(config: AppConfig): unknown {
       auth: config.http.auth ? { user: config.http.auth.user, password: '[REDACTED]' } : undefined,
     },
   };
-}
-
-export function isLoopbackHost(host: string): boolean {
-  return host === 'localhost' || host === '::1' || /^127\./.test(host);
-}
-
-export function resolveExecutable(command: string, envPath: string = process.env.PATH ?? ''): string | undefined {
-  const trimmed = command.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const candidates =
-    trimmed.includes('/') || trimmed.includes('\\')
-      ? [trimmed]
-      : envPath
-          .split(path.delimiter)
-          .filter(Boolean)
-          .map((directory) => path.join(directory, trimmed));
-
-  for (const candidate of candidates) {
-    try {
-      accessSync(candidate, fsConstants.X_OK);
-      return candidate;
-    } catch {
-      // Try the next PATH entry.
-    }
-  }
-  return undefined;
-}
-
-/**
- * Filesystem and executable checks performed at startup and by `--check`.
- */
-export async function checkEnvironment(config: AppConfig): Promise<EnvironmentReport> {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const tools: Record<ToolName, string | undefined> = {
-    ytDlp: resolveExecutable(config.tools.ytdlpPath),
-    ffmpeg: resolveExecutable(config.tools.ffmpegPath),
-    metaflac: resolveExecutable(config.tools.metaflacPath),
-  };
-
-  // Only metaflac is essential, and only for FLAC; the others merely disable
-  // YouTube downloads, so they should not stop the server from starting.
-  const toolVariables: Array<[ToolName, string, string, boolean, string]> = [
-    ['ytDlp', 'DEEZER_YTDLP_PATH', config.tools.ytdlpPath, false, 'YouTube downloads will fail'],
-    ['ffmpeg', 'DEEZER_FFMPEG_PATH', config.tools.ffmpegPath, false, 'YouTube audio extraction will fail'],
-    [
-      'metaflac',
-      'DEEZER_METAFLAC_PATH',
-      config.tools.metaflacPath,
-      config.deezer.quality === 'flac',
-      'FLAC files cannot be tagged',
-    ],
-  ];
-  for (const [tool, variable, command, required, consequence] of toolVariables) {
-    if (tools[tool]) {
-      continue;
-    }
-    if (required) {
-      errors.push(`${variable}: executable not found: ${command}`);
-    } else {
-      warnings.push(`${variable}: executable not found: ${command} (${consequence})`);
-    }
-  }
-
-  const directories = [
-    ...new Set([
-      config.downloads.baseDir,
-      config.downloads.songsDir,
-      config.downloads.albumsDir,
-      config.downloads.playlistsDir,
-      config.downloads.zipsDir,
-      config.downloads.youtubeDir,
-    ]),
-  ];
-  for (const directory of directories) {
-    try {
-      await mkdir(directory, { recursive: true });
-      await access(directory, fsConstants.W_OK);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`cannot create or write directory ${directory}: ${message}`);
-    }
-  }
-
-  if (!config.http.auth && !isLoopbackHost(config.http.host)) {
-    warnings.push(
-      `listening on ${config.http.host} without authentication; anyone who can reach this port can ` +
-        'start downloads and read logs. Set DEEZER_AUTH_USER and DEEZER_AUTH_PASSWORD.',
-    );
-  }
-
-  return { errors, warnings, tools, directories };
 }

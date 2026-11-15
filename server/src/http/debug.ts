@@ -3,15 +3,10 @@ import { open } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import type { AppConfig } from '../config/env.js';
+import { childStderr } from '../lib/child-process.js';
+import { errorMessage } from '../lib/errors.js';
 
-const execAsync = promisify(exec);
-
-const TAIL_LINES = 100;
-/** Plenty for 100 log lines; avoids loading a large log file into memory. */
-const TAIL_BYTES = 64 * 1024;
-
-/** Returns the last `lines` lines of a file, reading at most `maxBytes` from its end. */
-export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL_BYTES) {
+export async function tailFile(file: string, lines = 100, maxBytes = 64 * 1024): Promise<string> {
   const handle = await open(file, 'r');
   try {
     const { size } = await handle.stat();
@@ -20,7 +15,6 @@ export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL
     await handle.read(buffer, 0, length, size - length);
     let text = buffer.toString('utf8');
     if (length < size) {
-      // Drop the first, probably partial, line.
       text = text.slice(text.indexOf('\n') + 1);
     }
     return text
@@ -33,31 +27,31 @@ export async function tailFile(file: string, lines = TAIL_LINES, maxBytes = TAIL
   }
 }
 
+async function runDebugCommand(command: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await promisify(exec)(command, {
+      timeout: 5_000,
+      maxBuffer: 1024 * 1024,
+      encoding: 'utf8',
+    });
+    return `${stdout}${stderr}`;
+  } catch (error) {
+    return `Debug command failed:\n${childStderr(error) ?? errorMessage(error)}`;
+  }
+}
+
 export async function getDebugOutput(config: AppConfig): Promise<string> {
-  if (config.logging.debugCommand) {
-    try {
-      const { stdout, stderr } = await execAsync(config.logging.debugCommand, {
-        timeout: 5_000,
-        maxBuffer: 1024 * 1024,
-        encoding: 'utf8',
-      });
-      return `${stdout}${stderr}`;
-    } catch (error) {
-      const details =
-        typeof error === 'object' && error !== null && 'stderr' in error
-          ? String(error.stderr)
-          : error instanceof Error
-            ? error.message
-            : String(error);
-      return `Debug command failed:\n${details}`;
-    }
+  const { debugCommand, file } = config.logging;
+
+  if (debugCommand) {
+    return runDebugCommand(debugCommand);
   }
 
-  if (config.logging.file) {
+  if (file) {
     try {
-      return await tailFile(config.logging.file);
+      return await tailFile(file);
     } catch (error) {
-      return `Could not read ${config.logging.file}: ${error instanceof Error ? error.message : String(error)}`;
+      return `Could not read ${file}: ${errorMessage(error)}`;
     }
   }
 

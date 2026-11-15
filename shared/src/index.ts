@@ -1,4 +1,3 @@
-/** Non-secret configuration exposed to the frontend. */
 export interface ApiConfigResponse {
   version: string;
   useMpd: boolean;
@@ -16,6 +15,41 @@ export interface ApiErrorResponse {
   details?: string[];
 }
 
+export interface SearchRequest {
+  type: SearchType;
+  query: string;
+}
+
+export interface DownloadRequest {
+  type: 'track' | 'album';
+  music_id: number;
+  add_to_playlist: boolean;
+  create_zip: boolean;
+}
+
+export interface YoutubeDownloadRequest {
+  url: string;
+  add_to_playlist: boolean;
+}
+
+export interface YoutubePlaylistDownloadRequest {
+  url: string;
+  add_to_playlist: boolean;
+  create_zip: boolean;
+}
+
+export interface DeezerPlaylistDownloadRequest {
+  playlist_url: string;
+  add_to_playlist: boolean;
+  create_zip: boolean;
+}
+
+export interface FavoritesDownloadRequest {
+  user_id: string;
+  add_to_playlist: boolean;
+  create_zip: boolean;
+}
+
 export type TaskState = 'waiting' | 'active' | 'mission accomplished' | 'failed';
 
 export interface QueueTask {
@@ -25,7 +59,6 @@ export interface QueueTask {
   state: TaskState;
   result: string[] | null;
   exception: string | null;
-  /** Non-fatal problems, e.g. songs of an album that could not be downloaded. */
   warnings: string[];
   progress: [number, number];
   workerIndex: number | null;
@@ -54,9 +87,13 @@ export interface DebugResponse {
   debug_msg: string;
 }
 
+export type SearchType = 'track' | 'album' | 'artist' | 'album_track' | 'artist_album' | 'artist_top';
+
+export type SearchResultKind = 'track' | 'album' | 'artist';
+
 export interface SearchResultDto {
   id: string;
-  id_type: 'track' | 'album' | 'artist';
+  id_type: SearchResultKind;
   title: string;
   img_url: string;
   album: string;

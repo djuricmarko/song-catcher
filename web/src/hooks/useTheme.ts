@@ -3,8 +3,6 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 const STORAGE_KEY = 'dd-theme';
-// Mirrors --bg-sunken, the colour of the app bar, in each theme.
-const THEME_COLORS = { light: '#e6e1d5', dark: '#0c0b0a' } as const;
 const listeners = new Set<() => void>();
 
 function readPreference(): ThemePreference {
@@ -13,9 +11,7 @@ function readPreference(): ThemePreference {
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       return stored;
     }
-  } catch {
-    // Storage may be unavailable (private mode); fall back to system.
-  }
+  } catch {}
   return 'system';
 }
 
@@ -26,10 +22,9 @@ function systemPrefersDark(): boolean {
 export function applyTheme(preference: ThemePreference = readPreference()): void {
   const resolved = preference === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : preference;
   document.documentElement.dataset.theme = resolved;
-  // Keep the mobile browser chrome / status bar in step with the app bar.
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) {
-    meta.content = THEME_COLORS[resolved];
+    meta.content = { light: '#e6e1d5', dark: '#0c0b0a' }[resolved];
   }
 }
 
@@ -61,9 +56,7 @@ export function useTheme() {
   const setPreference = useCallback((next: ThemePreference) => {
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Ignore; the choice just won't persist.
-    }
+    } catch {}
     listeners.forEach((listener) => {
       listener();
     });

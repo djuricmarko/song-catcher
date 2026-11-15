@@ -19,7 +19,6 @@ interface SegmentedProps<T extends string> {
   'aria-label': string;
 }
 
-/** Single-choice segmented switch built on Base UI's ToggleGroup. */
 export function Segmented<T extends string>({
   value,
   onValueChange,
@@ -33,7 +32,7 @@ export function Segmented<T extends string>({
       onValueChange={(next) => {
         const [selected] = next;
         if (selected) {
-          onValueChange(selected as T);
+          onValueChange(selected);
         }
       }}
       className={cn(styles.group, className)}

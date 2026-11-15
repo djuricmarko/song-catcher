@@ -7,12 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig, type AppConfig } from '../src/config/env.js';
 import type { DeezerSong } from '../src/deezer/types.js';
-import {
-  DownloadError,
-  DownloadService,
-  YOUTUBE_PLAYLIST_MANIFEST,
-  type DeezerService,
-} from '../src/downloads/service.js';
+import { YOUTUBE_PLAYLIST_MANIFEST } from '../src/downloads/playlist-manifest.js';
+import { DownloadError, DownloadService, type DeezerService } from '../src/downloads/service.js';
 import {
   downloadWithYtDlp,
   listYtDlpPlaylist,

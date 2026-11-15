@@ -2,10 +2,12 @@
 import { Command } from 'commander';
 import pino from 'pino';
 
-import { ConfigError, checkEnvironment, loadConfig, redactConfig, type AppConfig } from './config/env.js';
+import { ConfigError, loadConfig, redactConfig, type AppConfig } from './config/env.js';
+import { checkEnvironment, type EnvironmentReport } from './config/preflight.js';
 import { DeezerClient } from './deezer/client.js';
-import { createLogger } from './logging.js';
 import { startServer } from './http/start.js';
+import { errorMessage } from './lib/errors.js';
+import { createLogger } from './logging.js';
 import { VERSION } from './version.js';
 
 interface CliOptions {
@@ -17,6 +19,34 @@ function printConfig(config: AppConfig): void {
   console.log(JSON.stringify(redactConfig(config), null, 2));
 }
 
+function reportEnvironment(report: EnvironmentReport): boolean {
+  for (const warning of report.warnings) {
+    console.warn(`warning: ${warning}`);
+  }
+  for (const error of report.errors) {
+    console.error(`error: ${error}`);
+  }
+  return report.errors.length === 0;
+}
+
+async function checkDeezerLogin(config: AppConfig, report: EnvironmentReport): Promise<boolean> {
+  console.log('Configuration OK');
+  for (const [name, executable] of Object.entries(report.tools)) {
+    console.log(`  ${name}: ${executable ?? 'not found'}`);
+  }
+
+  const deezer = new DeezerClient(config, pino({ level: 'silent' }));
+  try {
+    await deezer.init();
+    const loginOk = await deezer.testLogin();
+    console.log(`Deezer login: ${loginOk ? 'OK' : 'FAILED'}`);
+    return loginOk;
+  } catch (error) {
+    console.error(`Deezer login failed: ${errorMessage(error)}`);
+    return false;
+  }
+}
+
 async function run(options: CliOptions): Promise<void> {
   const config = loadConfig(process.env);
 
@@ -26,41 +56,19 @@ async function run(options: CliOptions): Promise<void> {
   }
 
   const report = await checkEnvironment(config);
-  for (const warning of report.warnings) {
-    console.warn(`warning: ${warning}`);
-  }
-  if (report.errors.length > 0) {
-    for (const error of report.errors) {
-      console.error(`error: ${error}`);
-    }
+  if (!reportEnvironment(report)) {
     process.exitCode = 1;
     return;
   }
 
   if (options.check) {
-    console.log('Configuration OK');
-    for (const [name, executable] of Object.entries(report.tools)) {
-      console.log(`  ${name}: ${executable ?? 'not found'}`);
-    }
-
-    const logger = pino({ level: 'silent' });
-    const deezer = new DeezerClient(config, logger);
-    try {
-      await deezer.init();
-      const loginOk = await deezer.testLogin();
-      console.log(`Deezer login: ${loginOk ? 'OK' : 'FAILED'}`);
-      if (!loginOk) {
-        process.exitCode = 1;
-      }
-    } catch (error) {
-      console.error(`Deezer login failed: ${error instanceof Error ? error.message : String(error)}`);
+    if (!(await checkDeezerLogin(config, report))) {
       process.exitCode = 1;
     }
     return;
   }
 
-  const logger = createLogger(config);
-  await startServer(config, logger);
+  await startServer(config, createLogger(config));
 }
 
 const program = new Command()

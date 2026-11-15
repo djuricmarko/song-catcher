@@ -1,16 +1,17 @@
 import { Tabs } from '@base-ui/react/tabs';
 import { ArrowRight, Heart, ListMusic } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { toast } from 'sonner';
 
 import { startFavoritesDownload, startPlaylistDownload } from '../../api/client';
 import { PageHeader } from '../../components/PageHeader';
+import { PasteButton } from '../../components/PasteButton';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
-import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { useEnqueue } from '../../hooks/useEnqueue';
 import { dismissKeyboard } from '../../lib/dismissKeyboard';
 
 import styles from './DeezerPage.module.css';
@@ -25,9 +26,9 @@ export function DeezerPage() {
   const [userId, setUserId] = useState('');
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, enqueue } = useEnqueue();
 
-  async function onPlaylistSubmit(event: FormEvent<HTMLFormElement>) {
+  function onPlaylistSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = playlistUrl.trim();
     if (!value) {
@@ -36,19 +37,15 @@ export function DeezerPage() {
     }
 
     dismissKeyboard();
-    setBusy(true);
-    try {
-      const task = await startPlaylistDownload(value, addToPlaylist, createZip);
-      toast.success('Playlist download queued', { description: `Task #${task.task_id}` });
-      setPlaylistUrl('');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
+    void enqueue(() => startPlaylistDownload(value, addToPlaylist, createZip), {
+      successMessage: 'Playlist download queued',
+      onQueued: () => {
+        setPlaylistUrl('');
+      },
+    });
   }
 
-  async function onFavoritesSubmit(event: FormEvent<HTMLFormElement>) {
+  function onFavoritesSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = userId.trim();
     if (!/^\d+$/.test(value)) {
@@ -57,17 +54,20 @@ export function DeezerPage() {
     }
 
     dismissKeyboard();
-    setBusy(true);
-    try {
-      const task = await startFavoritesDownload(value, addToPlaylist, createZip);
-      toast.success('Favorites download queued', { description: `Task #${task.task_id}` });
-      setUserId('');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
+    void enqueue(() => startFavoritesDownload(value, addToPlaylist, createZip), {
+      successMessage: 'Favorites download queued',
+      onQueued: () => {
+        setUserId('');
+      },
+    });
   }
+
+  const submitButton = (
+    <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
+      {busy ? 'Queueing…' : 'Download'}
+      <ArrowRight size={16} aria-hidden />
+    </Button>
+  );
 
   const options = (
     <div className={styles.options}>
@@ -140,10 +140,7 @@ export function DeezerPage() {
                     playlistUrl ? undefined : <PasteButton onPaste={setPlaylistUrl} label="Paste playlist link" />
                   }
                 />
-                <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
-                  {busy ? 'Queueing…' : 'Download'}
-                  <ArrowRight size={16} aria-hidden />
-                </Button>
+                {submitButton}
               </div>
               {options}
             </form>
@@ -168,10 +165,7 @@ export function DeezerPage() {
                   autoComplete="off"
                   aria-label="Deezer user id"
                 />
-                <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
-                  {busy ? 'Queueing…' : 'Download'}
-                  <ArrowRight size={16} aria-hidden />
-                </Button>
+                {submitButton}
               </div>
               <p className={styles.help}>
                 The number at the end of a profile link: deezer.com/profile/<mark>123456789</mark>

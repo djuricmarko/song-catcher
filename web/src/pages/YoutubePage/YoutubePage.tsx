@@ -1,21 +1,20 @@
 import { ArrowRight, Link2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { toast } from 'sonner';
 
 import { startYoutubeDownload, startYoutubePlaylistDownload } from '../../api/client';
 import { PageHeader } from '../../components/PageHeader';
+import { PasteButton } from '../../components/PasteButton';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Input } from '../../components/ui/Input';
-import { PasteButton } from '../../components/PasteButton';
 import { Panel } from '../../components/ui/Panel';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { useEnqueue } from '../../hooks/useEnqueue';
 import { dismissKeyboard } from '../../lib/dismissKeyboard';
 import { playlistLinkKind } from '../../lib/playlistUrl';
 
 import styles from './YoutubePage.module.css';
-
-const SOURCES = ['YouTube', 'SoundCloud', 'Vimeo', 'Bandcamp', 'Invidious', 'Mixcloud'];
 
 export function YoutubePage() {
   const appConfig = useAppConfig();
@@ -23,22 +22,20 @@ export function YoutubePage() {
   const [url, setUrl] = useState('');
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const [createZip, setCreateZip] = useState(false);
-  // Only meaningful for a video opened from a playlist; a playlist page is always downloaded whole.
   const [entirePlaylist, setEntirePlaylist] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, enqueue } = useEnqueue();
 
   const linkKind = playlistLinkKind(url);
   const playlistMode = linkKind === 'playlist' || (linkKind === 'video' && entirePlaylist);
 
   function changeUrl(next: string) {
-    // The choice belongs to one link; a different playlist starts from the default again.
     if (playlistLinkKind(next) !== 'video') {
       setEntirePlaylist(false);
     }
     setUrl(next);
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = url.trim();
     if (!trimmed.startsWith('http')) {
@@ -47,20 +44,15 @@ export function YoutubePage() {
     }
 
     dismissKeyboard();
-    setBusy(true);
-    try {
-      const task = playlistMode
-        ? await startYoutubePlaylistDownload(trimmed, addToPlaylist, createZip)
-        : await startYoutubeDownload(trimmed, addToPlaylist);
-      toast.success(playlistMode ? 'Playlist queued' : 'Download queued', {
-        description: `Task #${task.task_id}`,
-      });
-      changeUrl('');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
+    const start = playlistMode
+      ? () => startYoutubePlaylistDownload(trimmed, addToPlaylist, createZip)
+      : () => startYoutubeDownload(trimmed, addToPlaylist);
+    void enqueue(start, {
+      successMessage: playlistMode ? 'Playlist queued' : 'Download queued',
+      onQueued: () => {
+        changeUrl('');
+      },
+    });
   }
 
   return (
@@ -128,7 +120,7 @@ export function YoutubePage() {
       <div className={styles.sources}>
         <span className={styles.sourcesLabel}>Works with</span>
         <ul className={styles.sourceList}>
-          {SOURCES.map((source) => (
+          {['YouTube', 'SoundCloud', 'Vimeo', 'Bandcamp', 'Invidious', 'Mixcloud'].map((source) => (
             <li key={source}>{source}</li>
           ))}
           <li className={styles.more}>and many more</li>

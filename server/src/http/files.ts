@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { FileEntry, FilesResponse } from '@song-catcher/shared';
 
-import { isPathInside } from '../config/env.js';
+import { isPathInside, toPosixPath } from '../lib/paths.js';
 
 export class FileAccessError extends Error {
   public constructor(
@@ -13,10 +13,6 @@ export class FileAccessError extends Error {
     super(message);
     this.name = 'FileAccessError';
   }
-}
-
-function toPosix(value: string): string {
-  return value.split(path.sep).join('/');
 }
 
 export async function listFiles(baseDirectory: string, requestedPath: string): Promise<FilesResponse> {
@@ -53,7 +49,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
     const parent = path.dirname(target);
     entries.push({
       name: '..',
-      path: toPosix(path.relative(resolvedBase, parent)),
+      path: toPosixPath(path.relative(resolvedBase, parent)),
       isDirectory: true,
       size: 0,
     });
@@ -61,7 +57,6 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
 
   const directoryEntries = await readdir(target, { withFileTypes: true });
   for (const entry of directoryEntries) {
-    // Dotfiles are bookkeeping (e.g. the YouTube playlist manifest), not music.
     if (entry.name.startsWith('.')) {
       continue;
     }
@@ -72,12 +67,10 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
       const entryInfo = await stat(absolute);
       size = entryInfo.size;
       isDirectory = entryInfo.isDirectory();
-    } catch {
-      // Keep the Dirent information for broken symlinks.
-    }
+    } catch {}
     entries.push({
       name: entry.name,
-      path: toPosix(path.relative(resolvedBase, absolute)),
+      path: toPosixPath(path.relative(resolvedBase, absolute)),
       isDirectory,
       size,
     });
@@ -91,7 +84,7 @@ export async function listFiles(baseDirectory: string, requestedPath: string): P
   });
 
   return {
-    path: toPosix(path.relative(resolvedBase, target)),
+    path: toPosixPath(path.relative(resolvedBase, target)),
     entries,
   };
 }

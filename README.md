@@ -69,10 +69,11 @@ Launching it starts the built server in the background (if it isn't already runn
 default browser. Right-click the entry and choose **Stop Server** to stop it. Server logs go to
 `~/.local/state/song-catcher/server.log`. You can also run `scripts/song-catcher.sh [start|stop|status]` directly.
 
-For development, run the backend and Vite dev server together:
+For development, run the backend and the Vite dev server in two terminals:
 
 ```bash
-npm run dev
+npm run dev:server   # backend with reload on change (port 5000)
+npm run dev:web      # Vite with hot reload (port 5173)
 ```
 
 Then open <http://localhost:5173>. Vite serves the UI there and proxies `/api` and `/downloads` to the backend on
@@ -191,12 +192,13 @@ that path.
 
 ```bash
 npm install
-npm run dev          # backend + Vite with hot reload (UI at http://localhost:5173)
+npm run dev:server   # backend with reload on change (port 5000)
+npm run dev:web      # Vite with hot reload (UI at http://localhost:5173)
 npm run build        # shared types, backend and frontend production build
 npm start            # run the built backend (port 5000) and vite preview of web/dist (port 4173)
 npm test             # Vitest suites
 npm run typecheck    # strict TypeScript checks
-npm run lint         # ESLint
+npm run lint         # ESLint with type-aware rules (run a build first; it reads the shared types)
 npm run format       # Prettier
 npm run format:check # Prettier check for CI
 ```
@@ -207,9 +209,21 @@ Deezer/YouTube/MPD integration is intentionally not part of the default test sui
 Repository layout:
 
 ```text
-shared/   Shared API types
-server/   Fastify backend, Deezer client, queue, download orchestration
-web/      React 19 + Vite + Tailwind frontend
+shared/   API contract: request and response types used by both sides
+server/   Fastify backend
+  src/config/     environment variables -> validated config; startup checks
+  src/deezer/     Deezer client: session, search, page parsing, decryption, tagging
+  src/downloads/  download orchestration, file naming, yt-dlp, zip, m3u8, MPD sync
+  src/queue/      in-memory worker pool and the tasks it runs
+  src/http/       routes, request schemas, error mapping, auth, static files, SSE
+  src/mpd/        minimal MPD protocol client
+  src/lib/        small helpers shared by the modules above
+web/      React 19 + Vite frontend (CSS Modules, Base UI)
+  src/api/        typed client for the backend
+  src/pages/      one folder per page
+  src/components/ shared components; ui/ holds the design-system primitives
+  src/hooks/      queue stream, theme, previews, shortcuts, enqueueing
+  src/lib/        formatting, paths, saving files
 legacy/   Frozen Python 2.x app (removed in 4.0.0)
 ```
 

@@ -1,6 +1,7 @@
 import { Collapsible } from '@base-ui/react/collapsible';
 import { Progress } from '@base-ui/react/progress';
 import { ChevronRight, FileAudio } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { QueueTask, TaskState } from '@song-catcher/shared';
@@ -11,64 +12,75 @@ import { PageHeader } from '../../components/PageHeader';
 import { TaskStateBadge } from '../../components/TaskStateBadge';
 import { useQueue } from '../../hooks/useQueue';
 import { cn } from '../../lib/cn';
+import { formatClockTime, formatDuration, pluralize } from '../../lib/format';
+import { basename } from '../../lib/paths';
 
 import styles from './QueuePage.module.css';
 
 const METER_SEGMENTS = 24;
 
-function basename(filePath: string): string {
-  const parts = filePath.split(/[\\/]/);
-  return parts[parts.length - 1] || filePath;
-}
-
-function formatTime(timestamp: number): string {
-  if (!timestamp) {
-    return '--:--';
-  }
-  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function formatDuration(task: QueueTask): string | null {
+function taskDuration(task: QueueTask): string | null {
   if (!task.tsStarted) {
     return null;
   }
   const end = task.tsFinished || Date.now();
-  const seconds = Math.max(0, Math.round((end - task.tsStarted) / 1000));
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
+  return formatDuration(end - task.tsStarted);
 }
 
-const SUMMARY: Array<{ state: TaskState; label: string }> = [
-  { state: 'active', label: 'Running' },
-  { state: 'waiting', label: 'Waiting' },
-  { state: 'mission accomplished', label: 'Done' },
-  { state: 'failed', label: 'Failed' },
-];
+function progressPercent(task: QueueTask): number {
+  const [current, maximum] = task.progress;
+  if (maximum > 0) {
+    return Math.min(100, (current / maximum) * 100);
+  }
+  return task.state === 'mission accomplished' ? 100 : 0;
+}
+
+function progressLabel(task: QueueTask): string {
+  const [current, maximum] = task.progress;
+  if (maximum > 0) {
+    return `${current}/${maximum}`;
+  }
+  return task.state === 'waiting' ? 'idle' : '—';
+}
+
+function countByState(tasks: QueueTask[]): Partial<Record<TaskState, number>> {
+  const counts: Partial<Record<TaskState, number>> = {};
+  for (const task of tasks) {
+    counts[task.state] = (counts[task.state] ?? 0) + 1;
+  }
+  return counts;
+}
 
 function Meter({ task }: { task: QueueTask }) {
-  const [current, maximum] = task.progress;
-  const value =
-    maximum > 0 ? Math.min(100, (current / maximum) * 100) : task.state === 'mission accomplished' ? 100 : 0;
-  const lit = Math.round((value / 100) * METER_SEGMENTS);
+  const percent = progressPercent(task);
+  const litSegments = Math.round((percent / 100) * METER_SEGMENTS);
 
   return (
-    <Progress.Root value={value} className={styles.meter} aria-label={`Progress of task ${task.id}`}>
+    <Progress.Root value={percent} className={styles.meter} aria-label={`Progress of task ${task.id}`}>
       <Progress.Track className={cn(styles.meterTrack, task.state === 'failed' && styles.meterFailed)}>
         {Array.from({ length: METER_SEGMENTS }, (_, index) => (
-          <span key={index} className={cn(styles.segment, index < lit && styles.segmentLit)} />
+          <span key={index} className={cn(styles.segment, index < litSegments && styles.segmentLit)} />
         ))}
       </Progress.Track>
-      <span className={styles.meterValue}>
-        {maximum > 0 ? `${current}/${maximum}` : task.state === 'waiting' ? 'idle' : '—'}
-      </span>
+      <span className={styles.meterValue}>{progressLabel(task)}</span>
     </Progress.Root>
   );
 }
 
+function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <Collapsible.Root className={styles.collapsible}>
+      <Collapsible.Trigger className={styles.collapsibleTrigger}>
+        <ChevronRight size={14} className={styles.chevron} aria-hidden />
+        {summary}
+      </Collapsible.Trigger>
+      <Collapsible.Panel className={styles.collapsiblePanel}>{children}</Collapsible.Panel>
+    </Collapsible.Root>
+  );
+}
+
 function TaskCard({ task }: { task: QueueTask }) {
-  const duration = formatDuration(task);
+  const duration = taskDuration(task);
   const files = task.result ?? [];
 
   return (
@@ -78,13 +90,11 @@ function TaskCard({ task }: { task: QueueTask }) {
         <div className={styles.taskMain}>
           <p className={styles.taskDescription}>{task.description}</p>
           <p className={styles.taskMeta}>
-            <span>in {formatTime(task.tsQueued)}</span>
-            {task.tsStarted ? <span>start {formatTime(task.tsStarted)}</span> : null}
-            {task.tsFinished ? <span>end {formatTime(task.tsFinished)}</span> : null}
+            <span>in {formatClockTime(task.tsQueued)}</span>
+            {task.tsStarted ? <span>start {formatClockTime(task.tsStarted)}</span> : null}
+            {task.tsFinished ? <span>end {formatClockTime(task.tsFinished)}</span> : null}
             {duration ? <span>{duration}</span> : null}
-            {task.workerIndex !== null && task.workerIndex !== undefined ? (
-              <span>worker {task.workerIndex}</span>
-            ) : null}
+            {typeof task.workerIndex === 'number' ? <span>worker {task.workerIndex}</span> : null}
           </p>
         </div>
         <TaskStateBadge state={task.state} />
@@ -95,38 +105,26 @@ function TaskCard({ task }: { task: QueueTask }) {
       {task.exception ? <p className={styles.exception}>{task.exception}</p> : null}
 
       {task.warnings.length > 0 ? (
-        <Collapsible.Root className={styles.collapsible}>
-          <Collapsible.Trigger className={styles.collapsibleTrigger}>
-            <ChevronRight size={14} className={styles.chevron} aria-hidden />
-            {task.warnings.length} {task.warnings.length === 1 ? 'song' : 'songs'} skipped
-          </Collapsible.Trigger>
-          <Collapsible.Panel className={styles.collapsiblePanel}>
-            <ul className={styles.warningList}>
-              {task.warnings.map((warning, index) => (
-                <li key={index}>{warning}</li>
-              ))}
-            </ul>
-          </Collapsible.Panel>
-        </Collapsible.Root>
+        <Disclosure summary={`${pluralize(task.warnings.length, 'song')} skipped`}>
+          <ul className={styles.warningList}>
+            {task.warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        </Disclosure>
       ) : null}
 
       {!task.exception && files.length > 0 ? (
-        <Collapsible.Root className={styles.collapsible}>
-          <Collapsible.Trigger className={styles.collapsibleTrigger}>
-            <ChevronRight size={14} className={styles.chevron} aria-hidden />
-            {files.length} {files.length === 1 ? 'file' : 'files'} written
-          </Collapsible.Trigger>
-          <Collapsible.Panel className={styles.collapsiblePanel}>
-            <ul className={styles.resultList}>
-              {files.map((file) => (
-                <li key={file}>
-                  <FileAudio size={13} aria-hidden />
-                  {basename(file)}
-                </li>
-              ))}
-            </ul>
-          </Collapsible.Panel>
-        </Collapsible.Root>
+        <Disclosure summary={`${pluralize(files.length, 'file')} written`}>
+          <ul className={styles.resultList}>
+            {files.map((file) => (
+              <li key={file}>
+                <FileAudio size={13} aria-hidden />
+                {basename(file)}
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
       ) : null}
     </li>
   );
@@ -134,10 +132,7 @@ function TaskCard({ task }: { task: QueueTask }) {
 
 export function QueuePage() {
   const { tasks, connected, error } = useQueue();
-  const counts = tasks.reduce<Record<string, number>>((accumulator, task) => {
-    accumulator[task.state] = (accumulator[task.state] ?? 0) + 1;
-    return accumulator;
-  }, {});
+  const counts = countByState(tasks);
 
   return (
     <div>
@@ -162,7 +157,14 @@ export function QueuePage() {
 
       {tasks.length > 0 ? (
         <dl className={styles.summary}>
-          {SUMMARY.map(({ state, label }) => (
+          {(
+            [
+              { state: 'active', label: 'Running' },
+              { state: 'waiting', label: 'Waiting' },
+              { state: 'mission accomplished', label: 'Done' },
+              { state: 'failed', label: 'Failed' },
+            ] as const
+          ).map(({ state, label }) => (
             <div key={state} className={styles.summaryItem}>
               <dt>{label}</dt>
               <dd>{counts[state] ?? 0}</dd>

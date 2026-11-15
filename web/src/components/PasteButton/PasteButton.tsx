@@ -3,8 +3,8 @@ import { toast } from 'sonner';
 
 import styles from './PasteButton.module.css';
 
-/** The async clipboard API only exists in secure contexts (https or localhost). */
 function canReadClipboard(): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `clipboard` is missing in some browsers, whatever the DOM types say
   return typeof window !== 'undefined' && window.isSecureContext && typeof navigator.clipboard?.readText === 'function';
 }
 
@@ -13,10 +13,6 @@ interface PasteButtonProps {
   label?: string;
 }
 
-/**
- * One-tap paste for link fields; long-press-to-paste is fiddly on phones.
- * Renders nothing where the browser cannot read the clipboard.
- */
 export function PasteButton({ onPaste, label = 'Paste from clipboard' }: PasteButtonProps) {
   if (!canReadClipboard()) {
     return null;

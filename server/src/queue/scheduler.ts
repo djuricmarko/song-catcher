@@ -1,15 +1,15 @@
-import type { QueueTask, TaskState } from '@song-catcher/shared';
+import type { QueueTask } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
+import { errorMessage } from '../lib/errors.js';
+
 export interface TaskContext {
-  reportProgress(current: number, maximum: number): void;
-  /** Records a non-fatal problem; the task can still succeed. */
-  reportWarning(message: string): void;
+  reportProgress: (current: number, maximum: number) => void;
+  reportWarning: (message: string) => void;
 }
 
 export type TaskArgs = Record<string, unknown>;
 
-/** Maps handler names to the argument shape each handler receives. */
 export type TaskArgsMap = Record<string, TaskArgs>;
 
 export type TaskHandler<Args extends TaskArgs = TaskArgs> = (args: Args, context: TaskContext) => Promise<string[]>;
@@ -17,30 +17,10 @@ export type TaskHandler<Args extends TaskArgs = TaskArgs> = (args: Args, context
 export type TaskListener = (task: QueueTask) => void;
 export type TaskRemovedListener = (taskId: number) => void;
 
-interface InternalTask {
-  id: number;
-  description: string;
+interface InternalTask extends QueueTask {
   handlerName: string;
-  args: Record<string, unknown>;
-  state: TaskState;
-  result: string[] | null;
-  exception: string | null;
-  warnings: string[];
-  progress: [number, number];
-  workerIndex: number | null;
-  tsQueued: number;
-  tsStarted: number;
-  tsFinished: number;
 }
 
-/**
- * In-memory worker pool with a bounded history of processed tasks. It mirrors
- * the semantics of the old Python ThreadpoolScheduler while using async tasks.
- */
-/**
- * `Tasks` ties each handler name to its argument type, so `register` and
- * `enqueue` are checked against each other at compile time.
- */
 export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
   private readonly tasks: InternalTask[] = [];
   private readonly handlers = new Map<string, TaskHandler>();
@@ -61,7 +41,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     if (this.handlers.has(handlerName)) {
       throw new Error(`Task handler already registered: ${handlerName}`);
     }
-    // Safe: enqueue() only accepts Tasks[Name] for this name.
     this.handlers.set(handlerName, handler as TaskHandler);
   }
 
@@ -75,11 +54,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.logger.info({ workers: this.workerCount }, 'download workers started');
   }
 
-  /**
-   * Stops accepting work and waits for running tasks. With `graceMs`, gives
-   * up waiting after that long so shutdown cannot hang on a stuck download;
-   * abandoned tasks are logged and simply die with the process.
-   */
   public async stop(graceMs = Number.POSITIVE_INFINITY): Promise<void> {
     if (!this.stopRequested) {
       this.stopRequested = true;
@@ -94,7 +68,9 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       ? await Promise.race([
           workers,
           new Promise<false>((resolve) => {
-            timer = setTimeout(() => resolve(false), graceMs);
+            timer = setTimeout(() => {
+              resolve(false);
+            }, graceMs);
           }),
         ])
       : await workers;
@@ -150,10 +126,6 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     return this.tasks.map((task) => this.snapshot(task));
   }
 
-  /**
-   * Subscribes to task updates and, optionally, to tasks being dropped from
-   * the bounded history so clients can prune their copy.
-   */
   public subscribe(listener: TaskListener, onRemoved?: TaskRemovedListener): () => void {
     this.listeners.add(listener);
     if (onRemoved) {
@@ -220,7 +192,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
         task.state = 'mission accomplished';
       } catch (error) {
         task.state = 'failed';
-        task.exception = error instanceof Error ? error.message : String(error);
+        task.exception = errorMessage(error);
         this.logger.error({ err: error, taskId: task.id, handler: task.handlerName }, 'download task failed');
       } finally {
         task.tsFinished = Date.now();
@@ -238,22 +210,19 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       }
       const [removed] = this.tasks.splice(index, 1);
       if (removed) {
-        for (const listener of this.removedListeners) {
-          try {
-            listener(removed.id);
-          } catch (error) {
-            this.logger.warn({ err: error }, 'queue listener failed');
-          }
-        }
+        this.emit(this.removedListeners, removed.id);
       }
     }
   }
 
   private notify(task: InternalTask): void {
-    const snapshot = this.snapshot(task);
-    for (const listener of this.listeners) {
+    this.emit(this.listeners, this.snapshot(task));
+  }
+
+  private emit<Payload>(listeners: ReadonlySet<(payload: Payload) => void>, payload: Payload): void {
+    for (const listener of listeners) {
       try {
-        listener(snapshot);
+        listener(payload);
       } catch (error) {
         this.logger.warn({ err: error }, 'queue listener failed');
       }

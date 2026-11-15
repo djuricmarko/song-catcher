@@ -8,7 +8,8 @@ import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
-import { Deezer403Exception, Deezer404Exception, DeezerClient, isDeezerShortLink } from '../src/deezer/client.js';
+import { DeezerClient, isDeezerShortLink } from '../src/deezer/client.js';
+import { Deezer403Exception, Deezer404Exception } from '../src/deezer/errors.js';
 import type { DeezerSong } from '../src/deezer/types.js';
 
 const ARL = 'a'.repeat(192);

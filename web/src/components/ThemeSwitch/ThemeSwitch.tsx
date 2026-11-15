@@ -21,7 +21,7 @@ export function ThemeSwitch() {
       onValueChange={(next) => {
         const [value] = next;
         if (value) {
-          setPreference(value as ThemePreference);
+          setPreference(value);
         }
       }}
       className={styles.group}

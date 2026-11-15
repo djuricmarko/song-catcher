@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { QueueTask } from '@song-catcher/shared';
 
 import { API_ROOT, getQueue } from '../api/client';
+import { errorMessage } from '../lib/errors';
 
 interface QueueState {
   tasks: QueueTask[];
@@ -12,6 +13,24 @@ interface QueueState {
 
 const QueueContext = createContext<QueueState | null>(null);
 
+function parseEventData(event: MessageEvent<string>): unknown {
+  try {
+    return JSON.parse(event.data);
+  } catch {
+    return undefined;
+  }
+}
+
+function upsertTask(tasks: QueueTask[], task: QueueTask): QueueTask[] {
+  const index = tasks.findIndex((candidate) => candidate.id === task.id);
+  if (index === -1) {
+    return [...tasks, task];
+  }
+  const next = [...tasks];
+  next[index] = task;
+  return next;
+}
+
 function useQueueStream(): QueueState {
   const [tasks, setTasks] = useState<QueueTask[]>([]);
   const [connected, setConnected] = useState(false);
@@ -19,8 +38,6 @@ function useQueueStream(): QueueState {
 
   useEffect(() => {
     let active = true;
-    // The SSE snapshot is authoritative; the initial fetch is only a fallback
-    // for when the stream is slow to connect and must not overwrite newer data.
     let streamed = false;
 
     void getQueue()
@@ -32,46 +49,33 @@ function useQueueStream(): QueueState {
       })
       .catch((loadError: unknown) => {
         if (active) {
-          setError(loadError instanceof Error ? loadError.message : String(loadError));
+          setError(errorMessage(loadError));
         }
       });
 
     const source = new EventSource(`${API_ROOT}/queue/events`);
 
     const onSnapshot = (event: MessageEvent<string>) => {
-      try {
-        streamed = true;
-        setTasks(JSON.parse(event.data) as QueueTask[]);
+      streamed = true;
+      const snapshot = parseEventData(event) as QueueTask[] | undefined;
+      if (snapshot) {
+        setTasks(snapshot);
         setError(null);
-      } catch {
-        // Ignore malformed events and wait for the next one.
       }
     };
 
     const onTask = (event: MessageEvent<string>) => {
-      try {
-        streamed = true;
-        const task = JSON.parse(event.data) as QueueTask;
-        setTasks((previous) => {
-          const index = previous.findIndex((candidate) => candidate.id === task.id);
-          if (index === -1) {
-            return [...previous, task];
-          }
-          const next = [...previous];
-          next[index] = task;
-          return next;
-        });
-      } catch {
-        // Ignore malformed events and wait for the next one.
+      streamed = true;
+      const task = parseEventData(event) as QueueTask | undefined;
+      if (task) {
+        setTasks((previous) => upsertTask(previous, task));
       }
     };
 
     const onRemoved = (event: MessageEvent<string>) => {
-      try {
-        const { id } = JSON.parse(event.data) as { id: number };
-        setTasks((previous) => previous.filter((task) => task.id !== id));
-      } catch {
-        // Ignore malformed events and wait for the next one.
+      const removed = parseEventData(event) as { id: number } | undefined;
+      if (removed) {
+        setTasks((previous) => previous.filter((task) => task.id !== removed.id));
       }
     };
 
@@ -97,10 +101,6 @@ function useQueueStream(): QueueState {
   return { tasks, connected, error };
 }
 
-/**
- * Holds one queue event stream for the whole app, so the navigation badge
- * and the queue page share it and switching pages never reconnects.
- */
 export function QueueProvider({ children }: { children: ReactNode }) {
   const state = useQueueStream();
   return <QueueContext.Provider value={state}>{children}</QueueContext.Provider>;

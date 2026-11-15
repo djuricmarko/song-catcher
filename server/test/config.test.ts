@@ -4,16 +4,9 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  ConfigError,
-  checkEnvironment,
-  isLoopbackHost,
-  isPathInside,
-  loadConfig,
-  normalizeUrlPrefix,
-  redactConfig,
-  resolveExecutable,
-} from '../src/config/env.js';
+import { ConfigError, loadConfig, normalizeUrlPrefix, redactConfig } from '../src/config/env.js';
+import { checkEnvironment, isLoopbackHost, resolveExecutable } from '../src/config/preflight.js';
+import { isPathInside } from '../src/lib/paths.js';
 
 const ARL = 'a'.repeat(192);
 const minimalEnv = { DEEZER_COOKIE_ARL: ARL };

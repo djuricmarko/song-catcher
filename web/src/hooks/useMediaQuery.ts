@@ -1,6 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
-/** Live result of a CSS media query. */
 export function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(
     (onChange: () => void) => {
@@ -19,5 +18,4 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
-/** Matches the breakpoint where the sidebar turns into a top bar + bottom tab bar. */
 export const COMPACT_LAYOUT_QUERY = '(max-width: 820px)';

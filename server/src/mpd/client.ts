@@ -3,6 +3,8 @@ import { createConnection, type Socket } from 'node:net';
 
 import type { Logger } from 'pino';
 
+import { errorMessage } from '../lib/errors.js';
+
 export class MpdError extends Error {
   public constructor(message: string) {
     super(message);
@@ -105,11 +107,7 @@ export class MpdClient {
       }
     } catch (error) {
       this.close();
-      throw new MpdError(
-        `Could not connect to MPD at ${this.host}:${this.port}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      throw new MpdError(`Could not connect to MPD at ${this.host}:${this.port}: ${errorMessage(error)}`);
     }
   }
 

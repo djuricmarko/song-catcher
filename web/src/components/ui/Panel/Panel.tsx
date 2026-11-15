@@ -1,4 +1,4 @@
-import type { FormEventHandler, ReactNode } from 'react';
+import type { ReactNode, SubmitEventHandler } from 'react';
 
 import { cn } from '../../../lib/cn';
 
@@ -8,10 +8,9 @@ interface PanelProps {
   as?: 'div' | 'section' | 'form';
   className?: string;
   children: ReactNode;
-  onSubmit?: FormEventHandler<HTMLFormElement>;
+  onSubmit?: SubmitEventHandler<HTMLFormElement>;
 }
 
-/** A bordered surface. Deliberately flat; depth comes from the border and paper tone. */
 export function Panel({ as = 'div', className, children, onSubmit }: PanelProps) {
   if (as === 'form') {
     return (

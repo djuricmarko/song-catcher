@@ -1,11 +1,21 @@
 import type {
   ApiConfigResponse,
+  ApiErrorResponse,
   DebugResponse,
+  DeezerPlaylistDownloadRequest,
+  DownloadRequest,
+  FavoritesDownloadRequest,
   FilesResponse,
   QueueTask,
+  SearchRequest,
   SearchResultDto,
+  SearchType,
   TaskAcceptedResponse,
+  YoutubeDownloadRequest,
+  YoutubePlaylistDownloadRequest,
 } from '@song-catcher/shared';
+
+import { encodePath } from '../lib/paths';
 
 interface RuntimeConfig {
   apiRoot?: string;
@@ -21,29 +31,28 @@ declare global {
 export const API_ROOT = window.__APP_CONFIG__?.apiRoot ?? '/api';
 export const APP_ROOT = window.__APP_CONFIG__?.appRoot ?? '';
 
+async function failureMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as Partial<ApiErrorResponse>;
+    if (body.error) {
+      return body.details?.length ? `${body.error}: ${body.details.join(', ')}` : body.error;
+    }
+  } catch {}
+  return `${response.status} ${response.statusText}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
     },
   });
 
   if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    try {
-      const body = (await response.json()) as { error?: string; details?: string[] };
-      if (body.error) {
-        message = body.details?.length ? `${body.error}: ${body.details.join(', ')}` : body.error;
-      }
-    } catch {
-      // Keep the status-based message.
-    }
-    throw new Error(message);
+    throw new Error(await failureMessage(response));
   }
-
   return (await response.json()) as T;
 }
 
@@ -58,15 +67,9 @@ export function getConfig(): Promise<ApiConfigResponse> {
   return request<ApiConfigResponse>('/config');
 }
 
-export function searchMusic(type: string, query: string): Promise<SearchResultDto[]> {
-  return post<SearchResultDto[]>('/search', { type, query });
-}
-
-export interface DownloadRequest {
-  type: 'track' | 'album';
-  music_id: number;
-  add_to_playlist: boolean;
-  create_zip: boolean;
+export function searchMusic(type: SearchType, query: string): Promise<SearchResultDto[]> {
+  const body: SearchRequest = { type, query };
+  return post<SearchResultDto[]>('/search', body);
 }
 
 export function startDownload(payload: DownloadRequest): Promise<TaskAcceptedResponse> {
@@ -74,10 +77,8 @@ export function startDownload(payload: DownloadRequest): Promise<TaskAcceptedRes
 }
 
 export function startYoutubeDownload(url: string, addToPlaylist: boolean): Promise<TaskAcceptedResponse> {
-  return post<TaskAcceptedResponse>('/youtubedl', {
-    url,
-    add_to_playlist: addToPlaylist,
-  });
+  const body: YoutubeDownloadRequest = { url, add_to_playlist: addToPlaylist };
+  return post<TaskAcceptedResponse>('/youtubedl', body);
 }
 
 export function startYoutubePlaylistDownload(
@@ -85,11 +86,8 @@ export function startYoutubePlaylistDownload(
   addToPlaylist: boolean,
   createZip: boolean,
 ): Promise<TaskAcceptedResponse> {
-  return post<TaskAcceptedResponse>('/playlist/youtube', {
-    url,
-    add_to_playlist: addToPlaylist,
-    create_zip: createZip,
-  });
+  const body: YoutubePlaylistDownloadRequest = { url, add_to_playlist: addToPlaylist, create_zip: createZip };
+  return post<TaskAcceptedResponse>('/playlist/youtube', body);
 }
 
 export function startPlaylistDownload(
@@ -97,11 +95,12 @@ export function startPlaylistDownload(
   addToPlaylist: boolean,
   createZip: boolean,
 ): Promise<TaskAcceptedResponse> {
-  return post<TaskAcceptedResponse>('/playlist/deezer', {
+  const body: DeezerPlaylistDownloadRequest = {
     playlist_url: playlistUrl,
     add_to_playlist: addToPlaylist,
     create_zip: createZip,
-  });
+  };
+  return post<TaskAcceptedResponse>('/playlist/deezer', body);
 }
 
 export function startFavoritesDownload(
@@ -109,11 +108,8 @@ export function startFavoritesDownload(
   addToPlaylist: boolean,
   createZip: boolean,
 ): Promise<TaskAcceptedResponse> {
-  return post<TaskAcceptedResponse>('/favorites/deezer', {
-    user_id: userId,
-    add_to_playlist: addToPlaylist,
-    create_zip: createZip,
-  });
+  const body: FavoritesDownloadRequest = { user_id: userId, add_to_playlist: addToPlaylist, create_zip: createZip };
+  return post<TaskAcceptedResponse>('/favorites/deezer', body);
 }
 
 export function getQueue(): Promise<QueueTask[]> {
@@ -129,9 +125,5 @@ export function getDebug(): Promise<DebugResponse> {
 }
 
 export function downloadUrl(filePath: string): string {
-  const encoded = filePath
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-  return `${APP_ROOT}/downloads/${encoded}`;
+  return `${APP_ROOT}/downloads/${encodePath(filePath)}`;
 }
