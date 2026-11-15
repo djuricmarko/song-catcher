@@ -1,88 +1,22 @@
 # Song Catcher
 
-A self-hosted web app for downloading music from Deezer and YouTube. The 3.x release is a full
-rewrite: a TypeScript/Fastify backend and a React single-page frontend. Spotify support has been
-removed.
+A self-hosted app for downloading music from Deezer and YouTube. Run it as a web app on your own server or as a
+desktop app on Linux, Windows and macOS.
 
-The Python 2.x implementation is frozen under [`legacy/python/`](legacy/python/) for one release.
-It will be removed in 4.0.0.
+![Song Catcher search page](docs/screenshot.png)
 
 ## Features
 
-- Search Deezer tracks, albums and artists, with album/artist drill-down.
-- Download tracks, albums, Deezer playlists and your Deezer favourites.
-- Optional FLAC downloads for lossless accounts; otherwise the app falls back to MP3.
-- MP3 ID3 tags and embedded cover art; FLAC tags and embedded cover art via `metaflac`.
-- Download audio from YouTube with `yt-dlp`, one video or a whole playlist. Songs of a playlist that
-  are already on disk are skipped when you download it again.
-- Optional ZIP archives containing an `.m3u8` playlist.
-- Optional MPD integration: update the library and add downloads to the current playlist.
-- Live queue updates over Server-Sent Events (SSE).
-- File browser and a debug log view.
-- Proxy support (`https://`, `socks5://`, `socks5h://`).
-- URL-prefix support for reverse proxies.
-- Keyboard shortcuts: `Ctrl+M` focuses search and `Ctrl+Shift+1…6` switches tabs.
-- Environment-variable-only configuration. No INI file is read or generated.
-
-## Requirements
-
-- Node.js **22.9 or newer** (Node 24 is recommended).
-- npm 10 or newer (bundled with Node.js).
-- `ffmpeg` and `yt-dlp` for YouTube downloads.
-- `metaflac` from the `flac` package for FLAC tagging. The app checks for it at startup.
-
-## Quick start
-
-```bash
-git clone https://github.com/kmille/deezer-downloader.git
-cd deezer-downloader
-
-npm install
-cp .env.example .env
-```
-
-Put your Deezer `arl` cookie in `.env`:
-
-```dotenv
-DEEZER_COOKIE_ARL=your_arl_cookie
-```
-
-Then build and start the app:
-
-```bash
-npm run build
-npm start
-```
-
-Open <http://127.0.0.1:5000>. The backend serves the built UI itself. `npm start` also runs `vite preview`
-on <http://localhost:4173>, which serves `web/dist` and proxies `/api` and `/downloads` to port 5000. Use
-`npm run start:server` or `npm run start:web` to run only one of them.
-
-On Linux you can install a desktop entry so Song Catcher launches like a normal program:
-
-```bash
-scripts/install-desktop-entry.sh             # adds "Song Catcher" to your application menu
-scripts/install-desktop-entry.sh --uninstall # removes it
-```
-
-Launching it starts the built server in the background (if it isn't already running) and opens the UI in your
-default browser. Right-click the entry and choose **Stop Server** to stop it. Server logs go to
-`~/.local/state/song-catcher/server.log`. You can also run `scripts/song-catcher.sh [start|stop|status]` directly.
-
-For development, run the backend and the Vite dev server in two terminals:
-
-```bash
-npm run dev:server   # backend with reload on change (port 5000)
-npm run dev:web      # Vite with hot reload (port 5173)
-```
-
-Then open <http://localhost:5173>. Vite serves the UI there and proxies `/api` and `/downloads` to the backend on
-port 5000.
+- Search Deezer for tracks, albums and artists, and preview tracks before downloading.
+- Download tracks, albums, Deezer playlists and your Deezer favourites, as MP3 or FLAC, tagged and with cover art.
+- Download audio from YouTube, one video or a whole playlist.
+- Follow downloads in a live queue and browse the downloaded files.
+- Optional ZIP archives, MPD integration, proxy support and HTTP Basic auth.
 
 ## Desktop app
 
-Song Catcher also ships as an installable Electron app for Linux, Windows and macOS. It needs no Node.js, no
-`.env` file and no terminal: the backend runs inside the app, and `yt-dlp` and `ffmpeg` are bundled.
+The desktop app needs no Node.js, no `.env` file and no terminal. The backend runs inside the app, and `yt-dlp` and
+`ffmpeg` are bundled.
 
 ```bash
 npm install
@@ -90,212 +24,103 @@ npm run desktop        # build everything and start the app from source
 npm run desktop:dist   # build an installer for the platform you are on, into desktop/release/
 ```
 
-`desktop:dist` produces an AppImage and a `.tar.gz` on Linux, an NSIS installer on Windows, and a `.dmg` and `.zip`
-on macOS. Each platform has to be built on that platform; the **Desktop** GitHub Actions workflow builds all three
-when you push a `v*` tag or start it by hand. The installers are not code-signed, so Windows SmartScreen and macOS
-Gatekeeper warn on first launch.
-
-How the desktop app differs from the server:
-
-- Settings live in a settings window (**File → Settings…**, `Ctrl+,`) instead of environment variables. The first
-  launch opens it and asks for the ARL cookie, which is stored encrypted with the operating system's keychain where
-  one is available.
+- The first launch opens the settings window (**File → Settings…**, `Ctrl+,`) and asks for your
+  [ARL cookie](#getting-your-arl-cookie).
 - Downloads go to `Music/Song Catcher` in your home folder unless you choose another folder.
-- The backend listens on `127.0.0.1` only and requires a password that is generated on every launch, so other
-  programs and websites on the computer cannot use it.
 - **File → Update yt-dlp** downloads the latest yt-dlp when YouTube downloads start failing.
-- FLAC tagging still needs `metaflac` (from the `flac` package) installed on the computer; it is not bundled. The
-  quality switch offers FLAC only when it is found.
+- FLAC needs `metaflac` (from the `flac` package) installed on the computer.
+- The installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
 
-Settings, logs and the updated yt-dlp are kept in the per-user application data folder: `~/.config/Song Catcher`
-on Linux, `%APPDATA%\Song Catcher` on Windows and `~/Library/Application Support/Song Catcher` on macOS.
+## Web app
 
-## Getting your ARL cookie
-
-1. Log in to Deezer in a browser.
-2. Open the browser developer tools.
-3. Find the `arl` cookie for `deezer.com` under Storage → Cookies.
-4. Copy the value into `DEEZER_COOKIE_ARL`.
-
-The ARL is a password-equivalent credential. Never commit it, log it, or expose the app to the
-internet without authentication: set `DEEZER_AUTH_USER` and `DEEZER_AUTH_PASSWORD`, or put it
-behind an authenticating reverse proxy. `--print-config` redacts both secrets.
-
-## Configuration
-
-Every setting is an environment variable. `.env.example` contains a documented starting point. For
-local development, Node's native `--env-file` support loads `.env`; in production, use your process
-manager, Docker, or systemd to set real environment variables.
-
-| Variable                      | Default                  | Description                                                                             |
-| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
-| `DEEZER_COOKIE_ARL`           | **required**             | Deezer ARL cookie.                                                                      |
-| `DEEZER_QUALITY`              | `mp3`                    | `mp3` or `flac`. FLAC requires a lossless account; otherwise the app falls back to MP3. |
-| `DEEZER_PROXY_URL`            | empty                    | Optional `https://`, `socks5://` or `socks5h://` proxy.                                 |
-| `DEEZER_HTTP_HOST`            | `127.0.0.1`              | HTTP listen address. Use `0.0.0.0` in Docker.                                           |
-| `DEEZER_HTTP_PORT`            | `5000`                   | HTTP listen port.                                                                       |
-| `DEEZER_URL_PREFIX`           | empty                    | Reverse-proxy path prefix, for example `/deezer`.                                       |
-| `DEEZER_AUTH_USER`            | empty                    | HTTP Basic auth user. Set with `DEEZER_AUTH_PASSWORD` to require a login.               |
-| `DEEZER_AUTH_PASSWORD`        | empty                    | HTTP Basic auth password. `/api/health` stays public for health checks.                 |
-| `DEEZER_WORKERS`              | `4`                      | Number of download workers (1–32).                                                      |
-| `DEEZER_TASK_HISTORY`         | `500`                    | Maximum number of completed/failed tasks kept in memory.                                |
-| `DEEZER_DOWNLOAD_DIR`         | `/tmp/deezer-downloader` | Base download directory.                                                                |
-| `DEEZER_SONGS_DIR`            | `${base}/songs`          | Optional track directory override.                                                      |
-| `DEEZER_ALBUMS_DIR`           | `${base}/albums`         | Optional album directory override.                                                      |
-| `DEEZER_PLAYLISTS_DIR`        | `${base}/playlists`      | Optional playlist directory override.                                                   |
-| `DEEZER_ZIPS_DIR`             | `${base}/zips`           | Optional ZIP directory override.                                                        |
-| `DEEZER_YOUTUBE_DIR`          | `${base}/youtube-dl`     | Optional yt-dlp directory override.                                                     |
-| `DEEZER_YOUTUBE_PLAYLIST_MAX` | `500`                    | Maximum number of songs taken from one YouTube playlist (1–10000).                      |
-| `DEEZER_MPD_ENABLED`          | `false`                  | Enable MPD integration.                                                                 |
-| `DEEZER_MPD_HOST`             | `localhost`              | MPD host.                                                                               |
-| `DEEZER_MPD_PORT`             | `6600`                   | MPD port.                                                                               |
-| `DEEZER_MPD_MUSIC_DIR_ROOT`   | —                        | Required when MPD is enabled. All download directories must be inside it.               |
-| `DEEZER_YTDLP_PATH`           | `yt-dlp`                 | yt-dlp executable name or absolute path.                                                |
-| `DEEZER_FFMPEG_PATH`          | `ffmpeg`                 | ffmpeg executable name or absolute path.                                                |
-| `DEEZER_METAFLAC_PATH`        | `metaflac`               | metaflac executable name or absolute path.                                              |
-| `DEEZER_LOG_LEVEL`            | `info`                   | `fatal`, `error`, `warn`, `info`, `debug` or `trace`.                                   |
-| `DEEZER_LOG_FILE`             | empty                    | If set, logs are mirrored to this file and `/api/debug` tails it.                       |
-| `DEEZER_DEBUG_COMMAND`        | empty                    | Optional shell command used by `/api/debug`; overrides the log-file tail.               |
-
-Relative paths are resolved against the current working directory. The app creates all download
-directories at startup and fails early with an actionable error if a configured executable is
-missing.
-
-### MPD
-
-When `DEEZER_MPD_ENABLED=true`, `DEEZER_MPD_MUSIC_DIR_ROOT` must be set and every download
-directory must be inside it. After a successful download the app updates the MPD database, waits
-for the new file to be indexed, and adds it to the current playlist when requested.
-
-## CLI
+Requirements: Node.js 22.9 or newer, `ffmpeg` and `yt-dlp` for YouTube downloads, and `metaflac` (from the `flac`
+package) for FLAC.
 
 ```bash
-song-catcher --version
-song-catcher --print-config
-song-catcher --check
-song-catcher
+git clone https://github.com/djuricmarko/song-catcher.git
+cd song-catcher
+
+npm install
+cp .env.example .env   # then set DEEZER_COOKIE_ARL
+npm run build
+npm run start:server
 ```
 
-- `--version` prints the application version.
-- `--print-config` prints the resolved configuration with the ARL redacted.
-- `--check` validates configuration, checks external tools, and verifies the Deezer login.
-- With no flag, the HTTP server starts.
+Open <http://127.0.0.1:5000>.
 
-## Docker
+On Linux, `scripts/install-desktop-entry.sh` adds Song Catcher to your application menu. Launching it starts the
+server in the background and opens the UI in your browser. Run it with `--uninstall` to remove the entry.
+
+### Docker
 
 ```bash
 docker build -t song-catcher .
 
-mkdir -p downloads
 docker run --rm -p 5000:5000 \
   -v "$(pwd)/downloads:/mnt/deezer-downloader" \
   -e DEEZER_COOKIE_ARL=your_arl_cookie \
   song-catcher
 ```
 
-The image runs as a non-root user, includes `ffmpeg`, `flac` and `yt-dlp`, and stores downloads in
-`/mnt/deezer-downloader`. Mount that directory to keep downloads on the host.
+The image includes `ffmpeg`, `flac` and `yt-dlp`. Downloads are stored in `/mnt/deezer-downloader`.
 
-## API
+## Getting your ARL cookie
 
-All routes are under the configured prefix plus `/api`. The current API is compatible with the
-2.x route names:
+1. Log in to Deezer in a browser.
+2. Open the browser developer tools.
+3. Find the `arl` cookie for `deezer.com` under Storage → Cookies and copy its value.
 
-| Method | Path                    | Purpose                                                                                          |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `GET`  | `/api/health`           | Health and version information.                                                                  |
-| `GET`  | `/api/config`           | UI configuration (`useMpd`, version, prefix).                                                    |
-| `POST` | `/api/search`           | Search Deezer (`type`: `track`, `album`, `artist`, `album_track`, `artist_album`, `artist_top`). |
-| `POST` | `/api/download`         | Queue a track or album download.                                                                 |
-| `POST` | `/api/youtubedl`        | Queue a YouTube download.                                                                        |
-| `POST` | `/api/playlist/deezer`  | Queue a Deezer playlist download.                                                                |
-| `POST` | `/api/playlist/youtube` | Queue a YouTube playlist download (`url`, `add_to_playlist`, `create_zip`).                      |
-| `POST` | `/api/favorites/deezer` | Queue a Deezer favourites download.                                                              |
-| `GET`  | `/api/queue`            | Current queue and task history.                                                                  |
-| `GET`  | `/api/queue/events`     | SSE stream of queue updates.                                                                     |
-| `GET`  | `/api/files?path=`      | JSON directory listing.                                                                          |
-| `GET`  | `/api/debug`            | Recent log output.                                                                               |
+The ARL works like a password. Never commit it, and do not expose the app to the internet without authentication:
+set `DEEZER_AUTH_USER` and `DEEZER_AUTH_PASSWORD`, or put the app behind an authenticating reverse proxy.
 
-Downloaded files are served under `/downloads/`. The frontend handles ZIP and file downloads from
-that path.
+## Configuration
+
+The web app is configured with environment variables. [`.env.example`](.env.example) is a documented starting
+point. The desktop app uses its settings window instead.
+
+| Variable                      | Default                  | Description                                                               |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `DEEZER_COOKIE_ARL`           | **required**             | Deezer ARL cookie.                                                        |
+| `DEEZER_QUALITY`              | `mp3`                    | `mp3` or `flac`. Falls back to MP3 if the account has no lossless access. |
+| `DEEZER_PROXY_URL`            | empty                    | Optional `https://`, `socks5://` or `socks5h://` proxy.                   |
+| `DEEZER_HTTP_HOST`            | `127.0.0.1`              | HTTP listen address. Use `0.0.0.0` in Docker.                             |
+| `DEEZER_HTTP_PORT`            | `5000`                   | HTTP listen port.                                                         |
+| `DEEZER_URL_PREFIX`           | empty                    | Reverse-proxy path prefix, for example `/deezer`.                         |
+| `DEEZER_AUTH_USER`            | empty                    | HTTP Basic auth user. Set with `DEEZER_AUTH_PASSWORD` to require a login. |
+| `DEEZER_AUTH_PASSWORD`        | empty                    | HTTP Basic auth password. `/api/health` stays public for health checks.   |
+| `DEEZER_WORKERS`              | `4`                      | Number of download workers (1–32).                                        |
+| `DEEZER_TASK_HISTORY`         | `500`                    | Maximum number of finished tasks kept in the queue.                       |
+| `DEEZER_DOWNLOAD_DIR`         | `/tmp/deezer-downloader` | Base download directory.                                                  |
+| `DEEZER_SONGS_DIR`            | `${base}/songs`          | Track directory.                                                          |
+| `DEEZER_ALBUMS_DIR`           | `${base}/albums`         | Album directory.                                                          |
+| `DEEZER_PLAYLISTS_DIR`        | `${base}/playlists`      | Playlist directory.                                                       |
+| `DEEZER_ZIPS_DIR`             | `${base}/zips`           | ZIP directory.                                                            |
+| `DEEZER_YOUTUBE_DIR`          | `${base}/youtube-dl`     | YouTube download directory.                                               |
+| `DEEZER_YOUTUBE_PLAYLIST_MAX` | `500`                    | Maximum number of songs taken from one YouTube playlist (1–10000).        |
+| `DEEZER_MPD_ENABLED`          | `false`                  | Enable MPD integration.                                                   |
+| `DEEZER_MPD_HOST`             | `localhost`              | MPD host.                                                                 |
+| `DEEZER_MPD_PORT`             | `6600`                   | MPD port.                                                                 |
+| `DEEZER_MPD_MUSIC_DIR_ROOT`   | —                        | Required when MPD is enabled. All download directories must be inside it. |
+| `DEEZER_YTDLP_PATH`           | `yt-dlp`                 | yt-dlp executable name or absolute path.                                  |
+| `DEEZER_FFMPEG_PATH`          | `ffmpeg`                 | ffmpeg executable name or absolute path.                                  |
+| `DEEZER_METAFLAC_PATH`        | `metaflac`               | metaflac executable name or absolute path.                                |
+| `DEEZER_LOG_LEVEL`            | `info`                   | `fatal`, `error`, `warn`, `info`, `debug` or `trace`.                     |
+| `DEEZER_LOG_FILE`             | empty                    | If set, logs are also written to this file and shown on the Logs page.    |
+| `DEEZER_DEBUG_COMMAND`        | empty                    | Shell command whose output the Logs page shows instead of the log file.   |
 
 ## Development
 
 ```bash
-npm install
 npm run dev:server   # backend with reload on change (port 5000)
-npm run dev:web      # Vite with hot reload (UI at http://localhost:5173)
-npm run build        # shared types, backend and frontend production build
-npm start            # run the built backend (port 5000) and vite preview of web/dist (port 4173)
-npm run desktop      # build everything and start the Electron app
-npm run desktop:dist # build a desktop installer for the current platform
+npm run dev:web      # Vite with hot reload (http://localhost:5173)
 npm test             # Vitest suites
-npm run typecheck    # strict TypeScript checks
-npm run lint         # ESLint with type-aware rules (run a build first; it reads the shared types)
+npm run typecheck    # TypeScript checks
+npm run lint         # ESLint (run a build first; it reads the shared types)
 npm run format       # Prettier
-npm run format:check # Prettier check for CI
 ```
 
-Tests use mocked Deezer responses and temporary directories. They do not require a real ARL. Live
-Deezer/YouTube/MPD integration is intentionally not part of the default test suite.
-
-Repository layout:
-
-```text
-shared/   API contract: request and response types used by both sides
-server/   Fastify backend
-  src/config/     environment variables -> validated config; startup checks
-  src/deezer/     Deezer client: session, search, page parsing, decryption, tagging
-  src/downloads/  download orchestration, file naming, yt-dlp, zip, m3u8, MPD sync
-  src/queue/      in-memory worker pool and the tasks it runs
-  src/http/       routes, request schemas, error mapping, auth, static files, SSE
-  src/mpd/        minimal MPD protocol client
-  src/lib/        small helpers shared by the modules above
-web/      React 19 + Vite frontend (CSS Modules, Base UI)
-  src/api/        typed client for the backend
-  src/pages/      one folder per page
-  src/components/ shared components; ui/ holds the design-system primitives
-  src/hooks/      queue stream, theme, previews, shortcuts, enqueueing
-  src/lib/        formatting, paths, saving files
-desktop/  Electron app: runs the backend in a utility process and shows the web UI in a window
-  src/            main process, settings storage, bundled-tool lookup, the backend child process
-  renderer/       settings window (React, shares the web design-system components)
-  scripts/        esbuild bundling and the yt-dlp/ffmpeg download for packaging
-legacy/   Frozen Python 2.x app (removed in 4.0.0)
-```
-
-## Breaking changes in 3.0.0
-
-- Configuration is environment-variable-only. The INI file and `--config` flag are gone.
-- Spotify support is removed.
-- The backend is Node.js/TypeScript instead of Python/Flask.
-- The frontend is a React SPA instead of jQuery/Bootstrap.
-- Queue updates use SSE; the old `/queue` polling endpoint remains available as `/api/queue`.
-- The Python app lives under `legacy/python/` and is no longer the default entry point.
-
-### Migrating from the INI file
-
-| Old INI setting             | New environment variable              |
-| --------------------------- | ------------------------------------- |
-| `[deezer] cookie_arl`       | `DEEZER_COOKIE_ARL`                   |
-| `[deezer] quality`          | `DEEZER_QUALITY`                      |
-| `[proxy] server`            | `DEEZER_PROXY_URL`                    |
-| `[http] host`               | `DEEZER_HTTP_HOST`                    |
-| `[http] port`               | `DEEZER_HTTP_PORT`                    |
-| `[http] url_prefix`         | `DEEZER_URL_PREFIX`                   |
-| `[threadpool] workers`      | `DEEZER_WORKERS`                      |
-| `[download_dirs] base`      | `DEEZER_DOWNLOAD_DIR`                 |
-| `[download_dirs] songs`     | `DEEZER_SONGS_DIR`                    |
-| `[download_dirs] albums`    | `DEEZER_ALBUMS_DIR`                   |
-| `[download_dirs] playlists` | `DEEZER_PLAYLISTS_DIR`                |
-| `[download_dirs] zips`      | `DEEZER_ZIPS_DIR`                     |
-| `[download_dirs] youtubedl` | `DEEZER_YOUTUBE_DIR`                  |
-| `[mpd] use_mpd`             | `DEEZER_MPD_ENABLED`                  |
-| `[mpd] host` / `[mpd] port` | `DEEZER_MPD_HOST` / `DEEZER_MPD_PORT` |
-| `[mpd] music_dir_root`      | `DEEZER_MPD_MUSIC_DIR_ROOT`           |
-| `[youtubedl] command`       | `DEEZER_YTDLP_PATH`                   |
-| `[debug] command`           | `DEEZER_DEBUG_COMMAND`                |
-| `LOG_FILE`                  | `DEEZER_LOG_FILE`                     |
+The repository is an npm workspace: `shared/` holds the API types, `server/` the Fastify backend, `web/` the React
+frontend and `desktop/` the Electron app. Tests use mocked Deezer responses and need no ARL.
 
 ## License
 
