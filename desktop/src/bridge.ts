@@ -13,5 +13,10 @@ export interface DesktopBridge {
   load: () => Promise<SettingsState>;
   save: (settings: Settings) => Promise<SaveResult>;
   chooseDirectory: (current: string) => Promise<string | undefined>;
+  setTheme: (theme: Settings['theme']) => void;
   close: () => void;
+}
+
+export interface AppBridge {
+  openSettings: () => void;
 }

@@ -33,7 +33,8 @@ await build({
 
 await build({
   ...node,
-  entryPoints: ['src/preload.ts'],
-  outfile: 'dist/preload.cjs',
+  entryPoints: { preload: 'src/preload.ts', 'app-preload': 'src/app-preload.ts' },
+  outdir: 'dist',
   format: 'cjs',
+  outExtension: { '.js': '.cjs' },
 });

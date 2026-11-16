@@ -8,6 +8,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   session,
   shell,
   type IpcMainInvokeEvent,
@@ -127,12 +128,18 @@ function showMainWindow(origin: string): void {
   const window = new BrowserWindow({
     width: 1180,
     height: 800,
-    minWidth: 380,
-    minHeight: 520,
+    minWidth: 920,
+    minHeight: 560,
     show: false,
     title: 'Song Catcher',
     icon: path.join(webRoot, 'icon-512.png'),
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
+    webPreferences: {
+      preload: path.join(import.meta.dirname, 'app-preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
   });
   mainWindow = window;
 
@@ -277,6 +284,7 @@ function registerSettingsIpc(): void {
     }
 
     settings = parsed.data;
+    nativeTheme.themeSource = settings.theme;
     await saveSettings(settingsFile, settings);
     try {
       const { origin, loggedIn } = await startServer();
@@ -303,6 +311,22 @@ function registerSettingsIpc(): void {
       properties: ['openDirectory', 'createDirectory'],
     });
     return filePaths[0];
+  });
+
+  ipcMain.on('settings:set-theme', (event, input: unknown) => {
+    const theme = settingsSchema.shape.theme.safeParse(input);
+    if (event.sender !== settingsWindow?.webContents || !theme.success) {
+      return;
+    }
+    settings = { ...settings, theme: theme.data };
+    nativeTheme.themeSource = theme.data;
+    void saveSettings(settingsFile, settings);
+  });
+
+  ipcMain.on('app:open-settings', (event) => {
+    if (event.sender === mainWindow?.webContents) {
+      openSettings();
+    }
   });
 
   ipcMain.on('settings:close', (event) => {
@@ -433,6 +457,7 @@ if (app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     settings = await loadSettings(settingsFile, defaultSettings(path.join(app.getPath('music'), 'Song Catcher')));
+    nativeTheme.themeSource = settings.theme;
     seedYtDlp();
     restrictPermissions();
     registerSettingsIpc();

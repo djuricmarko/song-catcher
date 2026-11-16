@@ -71,6 +71,27 @@ function SettingsForm({ initial }: { initial: SettingsState }) {
       ) : null}
 
       <Panel as="section" className={styles.section}>
+        <h2 className={styles.sectionTitle}>Appearance</h2>
+        <div className={styles.field}>
+          <span className={styles.label}>Theme</span>
+          <Segmented
+            aria-label="Theme"
+            value={settings.theme}
+            onValueChange={(theme) => {
+              update({ theme });
+              window.songCatcher.setTheme(theme);
+            }}
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
+          <p className={styles.hint}>Applies straight away, without restarting the download service.</p>
+        </div>
+      </Panel>
+
+      <Panel as="section" className={styles.section}>
         <h2 className={styles.sectionTitle}>Deezer</h2>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="arl">

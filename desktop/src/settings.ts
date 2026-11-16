@@ -14,6 +14,7 @@ export const settingsSchema = z.object({
   mpdHost: z.string().trim().min(1, 'Enter the MPD host'),
   mpdPort: z.number().int().min(1).max(65535),
   mpdMusicDir: z.string().trim(),
+  theme: z.enum(['system', 'light', 'dark']),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -35,6 +36,7 @@ export function defaultSettings(downloadDir: string): Settings {
     mpdHost: 'localhost',
     mpdPort: 6600,
     mpdMusicDir: '',
+    theme: 'system',
   };
 }
 
