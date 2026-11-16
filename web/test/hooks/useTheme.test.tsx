@@ -97,7 +97,7 @@ describe('useTheme', () => {
   it('follows the system inside the desktop app, where the theme is a desktop setting', () => {
     window.localStorage.setItem('dd-theme', 'light');
     setMatchMedia({ [DARK]: true });
-    window.songCatcherApp = { openSettings: vi.fn() };
+    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn() };
     try {
       const { result } = renderHook(() => useTheme());
       expect(result.current.preference).toBe('system');

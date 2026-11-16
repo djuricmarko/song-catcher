@@ -163,14 +163,15 @@ describe('Sidebar queue', () => {
     expect(card).toHaveTextContent('Deezer said no');
   });
 
-  it('draws a progress bar for a running collection only', () => {
+  it('fills a progress ring for a running collection and spins for a single track', () => {
     renderSidebar([
       makeTask({ id: 1, kind: 'album', state: 'active', progress: [3, 12] }),
       makeTask({ id: 2, state: 'active', progress: [0, 1] }),
     ]);
-    const bars = document.querySelectorAll<HTMLElement>('.progress > span');
-    expect(bars).toHaveLength(1);
-    expect(bars[0]?.style.inlineSize).toBe('25%');
+    const arcs = document.querySelectorAll('.ring circle:last-child');
+    expect(arcs).toHaveLength(1);
+    expect(arcs[0]).toHaveAttribute('stroke-dasharray', '25 100');
+    expect(document.querySelectorAll('.spinner')).toHaveLength(1);
   });
 });
 
@@ -203,7 +204,7 @@ describe('Sidebar controls', () => {
 
   it('opens the desktop settings window in the desktop app', async () => {
     const openSettings = vi.fn();
-    window.songCatcherApp = { openSettings };
+    window.songCatcherApp = { platform: 'linux', openSettings };
     renderSidebar();
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(openSettings).toHaveBeenCalledOnce();

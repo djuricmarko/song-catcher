@@ -1,4 +1,5 @@
 .backdrop {
+  -webkit-app-region: no-drag;
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -13,6 +14,7 @@
 }
 
 .popup {
+  -webkit-app-region: no-drag;
   position: fixed;
   top: 22%;
   left: 50%;

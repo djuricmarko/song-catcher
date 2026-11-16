@@ -5,10 +5,12 @@ import type { QueueTask } from '@song-catcher/shared';
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
   nativeTheme,
+  screen,
   session,
   shell,
   type IpcMainInvokeEvent,
@@ -28,10 +30,20 @@ import {
 } from './settings.js';
 import { downloadYtDlp } from './tool-assets.js';
 import { builderPlatform, executableName, locateTools, searchDirectories } from './tools.js';
+import {
+  CONTENT_SECURITY_POLICY,
+  createRendererRecovery,
+  isSameOrigin,
+  safeExternalUrl,
+  titleBarOptions,
+  windowBackground,
+} from './window-chrome.js';
+import { loadWindowState, restoreWindowBounds, saveWindowState, type WindowState } from './window-state.js';
 
 const isMac = process.platform === 'darwin';
 const userData = app.getPath('userData');
 const settingsFile = path.join(userData, 'settings.json');
+const windowStateFile = path.join(userData, 'window-state.json');
 const userBin = path.join(userData, 'bin');
 const userYtDlp = path.join(userBin, executableName('yt-dlp'));
 const bundledBin = app.isPackaged
@@ -40,6 +52,11 @@ const bundledBin = app.isPackaged
 const webRoot = app.isPackaged
   ? path.join(process.resourcesPath, 'web')
   : path.join(import.meta.dirname, '../../web/dist');
+
+const APP_USER_MODEL_ID = 'io.github.djuricmarko.song-catcher';
+const MAIN_WINDOW_SIZE = { width: 1180, height: 800 };
+const MAIN_WINDOW_MIN_SIZE = { width: 920, height: 560 };
+const WINDOW_STATE_SAVE_DELAY_MS = 500;
 
 const LOGIN_REJECTED =
   'Deezer did not accept the ARL cookie, so Deezer downloads will fail. Paste a fresh one from your browser. ' +
@@ -93,8 +110,14 @@ async function startServer(): Promise<StartedServer> {
     ),
   );
 
-  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${started.origin}/*`] }, (details, callback) => {
+  const appRequests = { urls: [`${started.origin}/*`] };
+  session.defaultSession.webRequest.onBeforeSendHeaders(appRequests, (details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, Authorization: server.authorization } });
+  });
+  session.defaultSession.webRequest.onHeadersReceived(appRequests, (details, callback) => {
+    callback({
+      responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CONTENT_SECURITY_POLICY] },
+    });
   });
   return started;
 }
@@ -112,10 +135,117 @@ async function pendingDownloads(): Promise<number> {
   }
 }
 
-function openExternal(url: string): void {
-  if (/^https?:\/\//i.test(url)) {
+function openExternal(raw: string): void {
+  const url = safeExternalUrl(raw);
+  if (url) {
     void shell.openExternal(url);
   }
+}
+
+function syncAppearance(window: BrowserWindow): void {
+  const dark = nativeTheme.shouldUseDarkColors;
+  window.setBackgroundColor(windowBackground(dark));
+  const { titleBarOverlay } = titleBarOptions(process.platform, dark);
+  if (typeof titleBarOverlay === 'object') {
+    window.setTitleBarOverlay(titleBarOverlay);
+  }
+}
+
+function revealWhenReady(window: BrowserWindow, reveal: () => void): void {
+  let revealed = false;
+  const show = () => {
+    if (!revealed && !window.isDestroyed()) {
+      revealed = true;
+      reveal();
+    }
+  };
+  window.once('ready-to-show', show);
+  // ready-to-show is unreliable for hidden windows on Linux, so a finished load reveals the window too.
+  if (process.platform === 'linux') {
+    window.webContents.once('did-finish-load', show);
+  }
+}
+
+function recoverRenderer(window: BrowserWindow): void {
+  const recoveryDelay = createRendererRecovery();
+  window.webContents.on('render-process-gone', (_event, details) => {
+    const delay = recoveryDelay(details.reason, Date.now());
+    if (delay === undefined) {
+      return;
+    }
+    setTimeout(() => {
+      if (!window.isDestroyed()) {
+        window.webContents.reload();
+      }
+    }, delay);
+  });
+}
+
+// Electron shows no context menu of its own, which leaves text fields without cut, copy and paste.
+function installContextMenu(window: BrowserWindow): void {
+  window.webContents.on('context-menu', (_event, params) => {
+    const template: MenuItemConstructorOptions[] = [];
+    const link = safeExternalUrl(params.linkURL);
+    if (link) {
+      template.push({
+        label: 'Copy Link',
+        click: () => {
+          void clipboard.writeText(link);
+        },
+      });
+    }
+    if (params.isEditable) {
+      template.push(
+        ...(link ? [{ type: 'separator' } satisfies MenuItemConstructorOptions] : []),
+        { role: 'cut', enabled: params.editFlags.canCut },
+        { role: 'copy', enabled: params.editFlags.canCopy },
+        { role: 'paste', enabled: params.editFlags.canPaste },
+        { role: 'selectAll', enabled: params.editFlags.canSelectAll },
+      );
+    } else if (params.selectionText.trim() !== '') {
+      template.push({ role: 'copy' });
+    }
+    if (template.length > 0 && !window.isDestroyed()) {
+      Menu.buildFromTemplate(template).popup({ window });
+    }
+  });
+}
+
+function trackWindowState(window: BrowserWindow, initial: WindowState | undefined): void {
+  let state = initial;
+  let timer: NodeJS.Timeout | undefined;
+
+  const save = () => {
+    clearTimeout(timer);
+    // A minimized window reports stale geometry, so it keeps what was seen before it was minimized.
+    if (!window.isDestroyed() && !window.isMinimized()) {
+      const maximized = window.isMaximized();
+      const bounds = maximized || window.isFullScreen() ? window.getNormalBounds() : window.getBounds();
+      state = {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+        maximized,
+      };
+    }
+    if (state) {
+      saveWindowState(windowStateFile, state);
+    }
+  };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(save, WINDOW_STATE_SAVE_DELAY_MS);
+  };
+
+  window.on('resize', schedule);
+  window.on('move', schedule);
+  window.on('maximize', schedule);
+  window.on('unmaximize', schedule);
+  window.on('close', save);
+  window.on('closed', () => {
+    clearTimeout(timer);
+  });
 }
 
 function showMainWindow(origin: string): void {
@@ -125,15 +255,22 @@ function showMainWindow(origin: string): void {
     return;
   }
 
+  const savedState = loadWindowState(windowStateFile);
   const window = new BrowserWindow({
-    width: 1180,
-    height: 800,
-    minWidth: 920,
-    minHeight: 560,
+    ...restoreWindowBounds(
+      savedState,
+      screen.getAllDisplays().map((display) => display.bounds),
+      MAIN_WINDOW_SIZE,
+      MAIN_WINDOW_MIN_SIZE,
+    ),
+    minWidth: MAIN_WINDOW_MIN_SIZE.width,
+    minHeight: MAIN_WINDOW_MIN_SIZE.height,
     show: false,
+    autoHideMenuBar: true,
     title: 'Song Catcher',
     icon: path.join(webRoot, 'icon-512.png'),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#ffffff',
+    backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
+    ...titleBarOptions(process.platform, nativeTheme.shouldUseDarkColors),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'app-preload.cjs'),
       contextIsolation: true,
@@ -143,15 +280,21 @@ function showMainWindow(origin: string): void {
   });
   mainWindow = window;
 
-  window.once('ready-to-show', () => {
+  revealWhenReady(window, () => {
+    if (savedState?.maximized) {
+      window.maximize();
+    }
     window.show();
   });
+  trackWindowState(window, savedState);
+  recoverRenderer(window);
+  installContextMenu(window);
   window.webContents.setWindowOpenHandler(({ url }) => {
     openExternal(url);
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {
-    if (new URL(url).origin !== server.origin) {
+    if (!isSameOrigin(url, server.origin)) {
       event.preventDefault();
       openExternal(url);
     }
@@ -201,6 +344,8 @@ function openSettings(notice?: string): void {
     show: false,
     title: 'Song Catcher Settings',
     icon: path.join(webRoot, 'icon-512.png'),
+    backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
+    ...titleBarOptions(process.platform, nativeTheme.shouldUseDarkColors),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -211,9 +356,11 @@ function openSettings(notice?: string): void {
   settingsWindow = window;
   window.removeMenu();
 
-  window.once('ready-to-show', () => {
+  revealWhenReady(window, () => {
     window.show();
   });
+  recoverRenderer(window);
+  installContextMenu(window);
   window.webContents.setWindowOpenHandler(({ url }) => {
     openExternal(url);
     return { action: 'deny' };
@@ -329,6 +476,19 @@ function registerSettingsIpc(): void {
     }
   });
 
+  ipcMain.on('app:show-menu', (event, x: unknown, y: unknown) => {
+    if (event.sender !== mainWindow?.webContents || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    // The page reports CSS pixels, which the zoom level scales away from window coordinates.
+    const zoom = event.sender.getZoomFactor();
+    Menu.getApplicationMenu()?.popup({
+      window: mainWindow,
+      x: Math.round((x as number) * zoom),
+      y: Math.round((y as number) * zoom),
+    });
+  });
+
   ipcMain.on('settings:close', (event) => {
     if (event.sender === settingsWindow?.webContents) {
       settingsWindow.close();
@@ -433,6 +593,10 @@ function restrictPermissions(): void {
 }
 
 if (app.requestSingleInstanceLock()) {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(APP_USER_MODEL_ID);
+  }
+
   app.on('second-instance', () => {
     const window = mainWindow ?? settingsWindow;
     if (window?.isMinimized()) {
@@ -461,6 +625,9 @@ if (app.requestSingleInstanceLock()) {
     seedYtDlp();
     restrictPermissions();
     registerSettingsIpc();
+    nativeTheme.on('updated', () => {
+      BrowserWindow.getAllWindows().forEach(syncAppearance);
+    });
     Menu.setApplicationMenu(buildMenu());
     await launch();
   });

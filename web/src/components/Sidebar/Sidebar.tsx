@@ -97,7 +97,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.brand}>
+      <div className={cn(styles.brand, 'drag-region')}>
         <button
           type="button"
           className={styles.iconButton}

@@ -1,5 +1,7 @@
 interface DesktopApp {
+  platform: string;
   openSettings: () => void;
+  showMenu?: (x: number, y: number) => void;
 }
 
 declare global {

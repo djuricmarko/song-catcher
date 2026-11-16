@@ -28,6 +28,7 @@
 }
 
 .popup {
+  -webkit-app-region: no-drag;
   min-width: 8rem;
   padding: 0.25rem;
   border: 1px solid var(--line);

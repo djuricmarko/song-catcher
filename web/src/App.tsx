@@ -1,11 +1,12 @@
-import { ChartNoAxesColumn, FolderOpen, PanelLeft } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { ChartNoAxesColumn, Ellipsis, FolderOpen, PanelLeft } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { Sidebar } from './components/Sidebar';
 import { SourceLabel } from './components/SourceLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { cn } from './lib/cn';
+import { desktopApp } from './lib/desktop';
 import { DebugPage } from './pages/DebugPage';
 import { DeezerPage } from './pages/DeezerPage';
 import { FilesPage } from './pages/FilesPage';
@@ -68,11 +69,16 @@ function Breadcrumb() {
 export default function App() {
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const showMenu = desktopApp()?.showMenu;
 
   useKeyboardShortcuts(VIEWS.map((view) => view.path));
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    if (viewRef.current) {
+      viewRef.current.scrollTop = 0;
+    }
   }, [pathname]);
 
   function collapse(next: boolean) {
@@ -93,11 +99,11 @@ export default function App() {
       )}
 
       <main className={styles.main}>
-        <header className={styles.header}>
+        <header className={cn(styles.header, 'drag-region')}>
           {collapsed ? (
             <button
               type="button"
-              className={styles.expand}
+              className={cn(styles.headerButton, styles.expand)}
               aria-label="Show sidebar"
               title="Show sidebar"
               onClick={() => {
@@ -108,8 +114,22 @@ export default function App() {
             </button>
           ) : null}
           <Breadcrumb />
+          {showMenu ? (
+            <button
+              type="button"
+              className={cn(styles.headerButton, styles.appMenu)}
+              aria-label="Menu"
+              title="Menu"
+              onClick={(event) => {
+                const { left, bottom } = event.currentTarget.getBoundingClientRect();
+                showMenu(left, bottom + 4);
+              }}
+            >
+              <Ellipsis size={14} strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
         </header>
-        <div className={styles.view}>
+        <div ref={viewRef} className={styles.view}>
           <Routes>
             <Route path="/youtube" element={<YoutubePage />} />
             <Route path="/deezer" element={<DeezerPage />} />

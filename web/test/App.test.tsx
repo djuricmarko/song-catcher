@@ -111,6 +111,25 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'New download' })).not.toBeInTheDocument();
   });
 
+  it('offers the application menu where the desktop window has no menu bar', async () => {
+    const showMenu = vi.fn();
+    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn(), showMenu };
+    try {
+      setup();
+      const button = screen.getByRole('button', { name: 'Menu' });
+      vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(new DOMRect(900, 11, 26, 26));
+      await userEvent.click(button);
+      expect(showMenu).toHaveBeenCalledWith(900, 41);
+    } finally {
+      delete window.songCatcherApp;
+    }
+  });
+
+  it('has no menu button in a browser', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+  });
+
   it('removes the keyboard listener on unmount', () => {
     const remove = vi.spyOn(window, 'removeEventListener');
     mockFetch({ 'GET /config': { version: '1', useMpd: false, urlPrefix: '' }, 'GET /queue': [] });

@@ -28,13 +28,38 @@ const KIND_ICONS: Record<TaskKind, LucideIcon> = { track: AudioLines, album: Dis
 
 function StateMark({ task }: { task: QueueTask }) {
   switch (task.state) {
-    case 'active':
+    case 'active': {
+      const [current, maximum] = task.progress;
       return (
         <span className={styles.state}>
-          <LoaderCircle size={14} strokeWidth={1.75} className={styles.spinner} aria-hidden />
+          {maximum > 1 ? (
+            <svg
+              className={styles.ring}
+              viewBox="0 0 24 24"
+              width={14}
+              height={14}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              aria-hidden
+            >
+              <circle cx={12} cy={12} r={10} />
+              <circle
+                cx={12}
+                cy={12}
+                r={10}
+                pathLength={100}
+                strokeDasharray={`${Math.min(100, (current / maximum) * 100)} 100`}
+                strokeLinecap="round"
+              />
+            </svg>
+          ) : (
+            <LoaderCircle size={14} strokeWidth={1.75} className={styles.spinner} aria-hidden />
+          )}
           <span className="sr-only">Downloading</span>
         </span>
       );
+    }
     case 'waiting':
       return (
         <span className={styles.state}>
@@ -91,7 +116,6 @@ function Details({ task }: { task: QueueTask }) {
 
 export function QueueItem({ task }: { task: QueueTask }) {
   const KindIcon = KIND_ICONS[task.kind];
-  const [current, maximum] = task.progress;
   const subtitle = task.subtitle ?? (task.date ? formatDate(task.date) : `Queued ${formatClockTime(task.tsQueued)}`);
 
   return (
@@ -111,11 +135,6 @@ export function QueueItem({ task }: { task: QueueTask }) {
             <span className={styles.subtitle}>{subtitle}</span>
             <KindIcon size={14} strokeWidth={1.75} className={styles.kind} aria-hidden />
           </span>
-          {task.state === 'active' && maximum > 1 ? (
-            <span className={styles.progress} aria-hidden>
-              <span style={{ inlineSize: `${Math.min(100, (current / maximum) * 100)}%` }} />
-            </span>
-          ) : null}
         </Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Positioner side="right" align="start" sideOffset={24} className={styles.positioner}>

@@ -30,7 +30,7 @@
   --bad: oklch(57.7% 0.245 27.325);
   --bad-soft: color-mix(in oklab, var(--bad) 10%, transparent);
 
-  --overlay: rgb(255 255 255 / 0.8);
+  --overlay: rgb(255 255 255 / 0.3);
   --focus-ring: 0 0 0 1px var(--bg), 0 0 0 3px color-mix(in oklab, var(--signal) 45%, transparent);
   --shadow-popup: 0 8px 24px -6px rgb(0 0 0 / 0.12), 0 2px 6px -2px rgb(0 0 0 / 0.08);
 
@@ -55,6 +55,24 @@
   --sidebar-width: 14.375rem;
   --header-height: 3rem;
   --composer-width: 41.5rem;
+
+  /* Space the desktop app's native window buttons take from either end of the title bar. */
+  --titlebar-inset-start: 0px;
+  --titlebar-inset-end: 0px;
+}
+
+/* Window controls overlay: the desktop app draws the window buttons over the page and reports where.
+   The buttons keep their size when the page zooms, so the header follows them to stay level with them,
+   down to the height its own controls need. */
+.wco {
+  --header-height: max(2.25rem, env(titlebar-area-height, 3rem));
+  --titlebar-inset-start: env(titlebar-area-x, 0px);
+  --titlebar-inset-end: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
+}
+
+/* macOS has no overlay geometry; the traffic lights always sit in the left corner. */
+.desktop-mac {
+  --titlebar-inset-start: 4.75rem;
 }
 
 :root[data-theme='dark'] {
@@ -82,7 +100,7 @@
   --warn: oklch(82.8% 0.189 84.429);
   --bad: oklch(70.4% 0.191 22.216);
 
-  --overlay: rgb(0 0 0 / 0.87);
+  --overlay: rgb(0 0 0 / 0.3);
   --shadow-popup: 0 16px 40px -8px rgb(0 0 0 / 0.7);
 }
 
@@ -245,6 +263,17 @@ body {
   --error-bg: color-mix(in oklab, var(--bad) 12%, var(--surface-raised));
   --error-border: color-mix(in oklab, var(--bad) 40%, var(--surface-raised));
   --error-text: var(--bad);
+}
+
+/* Title bar of the frameless desktop window: dragging it moves the window, its controls stay clickable. */
+/* Drag regions ignore stacking, so overlays that can cover it set -webkit-app-region: no-drag. */
+.drag-region {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.drag-region :is(button, input, select, textarea, a) {
+  -webkit-app-region: no-drag;
 }
 
 .sr-only {

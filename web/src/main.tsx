@@ -8,6 +8,8 @@ import App from './App';
 import { APP_ROOT } from './api/client';
 import { QueueProvider } from './hooks/useQueue';
 import { useTheme } from './hooks/useTheme';
+import { desktopApp } from './lib/desktop';
+import { syncWindowChrome } from './lib/windowChrome';
 import './styles/global.css';
 
 const queryClient = new QueryClient({
@@ -23,6 +25,8 @@ function ThemedToaster() {
   const { preference } = useTheme();
   return <Toaster position="bottom-right" theme={preference} richColors />;
 }
+
+syncWindowChrome(desktopApp()?.platform);
 
 const root = document.getElementById('root');
 if (!root) {
