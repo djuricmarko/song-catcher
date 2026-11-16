@@ -1,0 +1,92 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: var(--composer-width);
+  padding: 0.5rem 0.625rem 0.5rem 0.9375rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.composer:focus-within {
+  border-color: var(--line-strong);
+}
+
+.row,
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.75rem;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.75rem;
+  outline: none;
+  color: var(--ink);
+}
+
+.input:focus-visible {
+  box-shadow: none;
+}
+
+.input::placeholder {
+  color: var(--ink-muted);
+}
+
+.controls {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.send {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background-color: var(--control);
+  color: var(--ink-soft);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.send:hover:not(:disabled) {
+  background-color: var(--signal);
+  color: var(--on-signal);
+}
+
+.send:disabled {
+  opacity: 0.5;
+}
+
+.stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 21vh;
+}
+
+.stageRaised {
+  justify-content: flex-start;
+  padding: 5.5rem 0 4rem;
+}
+
+.stageBody {
+  width: 100%;
+  max-width: var(--composer-width);
+}

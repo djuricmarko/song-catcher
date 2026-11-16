@@ -20,10 +20,8 @@
     color var(--dur) var(--ease);
 }
 
-@media (hover: hover) {
-  .item:hover {
-    color: var(--ink);
-  }
+.item:hover {
+  color: var(--ink);
 }
 
 .item[data-pressed] {
@@ -32,11 +30,4 @@
   box-shadow:
     0 0 0 1px var(--line),
     0 1px 2px rgb(0 0 0 / 0.06);
-}
-
-@media (pointer: coarse) {
-  .item {
-    width: 2.375rem;
-    height: 2.125rem;
-  }
 }

@@ -27,7 +27,6 @@ export interface AppConfig {
     songsDir: string;
     albumsDir: string;
     playlistsDir: string;
-    zipsDir: string;
     youtubeDir: string;
   };
   queue: {
@@ -149,7 +148,6 @@ const envSchema = z.object({
   DEEZER_SONGS_DIR: optionalEnvText,
   DEEZER_ALBUMS_DIR: optionalEnvText,
   DEEZER_PLAYLISTS_DIR: optionalEnvText,
-  DEEZER_ZIPS_DIR: optionalEnvText,
   DEEZER_YOUTUBE_DIR: optionalEnvText,
   DEEZER_YOUTUBE_PLAYLIST_MAX: envInteger(500, 1, 10000),
   DEEZER_MPD_ENABLED: envBoolean,
@@ -210,7 +208,6 @@ function resolveDownloadDirectories(raw: RawEnv, cwd: string): AppConfig['downlo
     songsDir: subdirectory(raw.DEEZER_SONGS_DIR, 'songs'),
     albumsDir: subdirectory(raw.DEEZER_ALBUMS_DIR, 'albums'),
     playlistsDir: subdirectory(raw.DEEZER_PLAYLISTS_DIR, 'playlists'),
-    zipsDir: subdirectory(raw.DEEZER_ZIPS_DIR, 'zips'),
     youtubeDir: subdirectory(raw.DEEZER_YOUTUBE_DIR, 'youtube-dl'),
   };
 }

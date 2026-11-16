@@ -48,6 +48,12 @@ describe('settingsSchema', () => {
     expect(result.error && settingsIssues(result.error)).toContain('socks5://');
   });
 
+  it('knows the three themes and nothing else', () => {
+    expect(defaults.theme).toBe('system');
+    expect(settingsSchema.safeParse({ ...defaults, theme: 'dark' }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...defaults, theme: 'sepia' }).success).toBe(false);
+  });
+
   it('accepts a socks proxy', () => {
     expect(settingsSchema.safeParse({ ...defaults, proxyUrl: 'socks5h://127.0.0.1:9050' }).success).toBe(true);
   });

@@ -1,11 +1,20 @@
-import type { QueueTask } from '@song-catcher/shared';
+import type { QueueTask, TaskKind, TaskMedia, TaskSource } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
 import { errorMessage } from '../lib/errors.js';
+import { totalFileSize } from '../lib/files.js';
 
 export interface TaskContext {
   reportProgress: (current: number, maximum: number) => void;
   reportWarning: (message: string) => void;
+  reportMedia: (media: Partial<TaskMedia>) => void;
+}
+
+export interface TaskLabel {
+  source: TaskSource;
+  kind: TaskKind;
+  title: string;
+  subtitle?: string | undefined;
 }
 
 export type TaskArgs = Record<string, unknown>;
@@ -88,11 +97,7 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
     this.logger.info('download workers stopped');
   }
 
-  public enqueue<Name extends keyof Tasks & string>(
-    description: string,
-    handlerName: Name,
-    args: Tasks[Name],
-  ): QueueTask {
+  public enqueue<Name extends keyof Tasks & string>(handlerName: Name, args: Tasks[Name], label: TaskLabel): QueueTask {
     if (this.stopRequested) {
       throw new Error('The scheduler is stopping; cannot enqueue new tasks');
     }
@@ -102,7 +107,12 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
 
     const task: InternalTask = {
       id: this.nextTaskId,
-      description,
+      source: label.source,
+      kind: label.kind,
+      title: label.title,
+      subtitle: label.subtitle ?? null,
+      date: null,
+      sizeBytes: 0,
       handlerName,
       args: { ...args },
       state: 'waiting',
@@ -188,7 +198,12 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
             task.warnings.push(message);
             this.notify(task);
           },
+          reportMedia: (media) => {
+            Object.assign(task, media);
+            this.notify(task);
+          },
         });
+        task.sizeBytes = await totalFileSize(task.result);
         task.state = 'mission accomplished';
       } catch (error) {
         task.state = 'failed';
@@ -232,7 +247,12 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
   private snapshot(task: InternalTask): QueueTask {
     return {
       id: task.id,
-      description: task.description,
+      source: task.source,
+      kind: task.kind,
+      title: task.title,
+      subtitle: task.subtitle,
+      date: task.date,
+      sizeBytes: task.sizeBytes,
       args: { ...task.args },
       state: task.state,
       result: task.result ? [...task.result] : null,

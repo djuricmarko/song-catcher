@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Download, File, FileArchive, FileAudio, Folder, RefreshCw } from 'lucide-react';
+import { ChevronRight, Download, File, FileAudio, Folder, RefreshCw } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -9,7 +9,6 @@ import type { FileEntry } from '@song-catcher/shared';
 import { downloadUrl, getFiles } from '../../api/client';
 import { Alert } from '../../components/Alert';
 import { EmptyState } from '../../components/EmptyState';
-import { PageHeader } from '../../components/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { errorMessage } from '../../lib/errors';
 import { formatFileSize, pluralize } from '../../lib/format';
@@ -19,14 +18,8 @@ import { saveFile } from '../../lib/saveFile';
 import styles from './FilesPage.module.css';
 
 function FileIcon({ name }: { name: string }) {
-  const extension = fileExtension(name);
-  if (extension === 'zip') {
-    return <FileArchive size={18} strokeWidth={1.5} className={styles.iconArchive} aria-hidden />;
-  }
-  if (['mp3', 'flac', 'm3u8'].includes(extension)) {
-    return <FileAudio size={18} strokeWidth={1.5} className={styles.iconAudio} aria-hidden />;
-  }
-  return <File size={18} strokeWidth={1.5} className={styles.iconFile} aria-hidden />;
+  const Icon = ['mp3', 'flac', 'm3u8'].includes(fileExtension(name)) ? FileAudio : File;
+  return <Icon size={15} strokeWidth={1.75} className={styles.entryIcon} aria-hidden />;
 }
 
 async function onFileClick(event: MouseEvent<HTMLAnchorElement>, filePath: string, fileName: string) {
@@ -62,9 +55,9 @@ function DirectoryRow({ entry }: { entry: FileEntry }) {
         void navigate(filesRoute(entry.path));
       }}
     >
-      <Folder size={18} strokeWidth={1.5} className={styles.iconFolder} aria-hidden />
-      <span className={styles.directoryName}>{entry.name}</span>
-      <ChevronRight size={16} className={styles.entryTrail} aria-hidden />
+      <Folder size={15} strokeWidth={1.75} className={styles.entryIcon} aria-hidden />
+      <span className={styles.entryName}>{entry.name}</span>
+      <ChevronRight size={14} className={styles.entryTrail} aria-hidden />
     </button>
   );
 }
@@ -81,9 +74,9 @@ function FileRow({ entry }: { entry: FileEntry }) {
       }}
     >
       <FileIcon name={entry.name} />
-      <span className={styles.fileName}>{entry.name}</span>
+      <span className={styles.entryName}>{entry.name}</span>
       <span className={styles.fileSize}>{formatFileSize(entry.size)}</span>
-      <Download size={15} className={styles.entryTrail} aria-hidden />
+      <Download size={14} className={styles.entryTrail} aria-hidden />
     </a>
   );
 }
@@ -135,31 +128,9 @@ export function FilesPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title={
-          <>
-            Everything <em>on the shelf</em>
-          </>
-        }
-        description="Browse finished songs, album folders, playlists and zip archives. Click a file to download it."
-        actions={
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={files.isFetching}
-            onClick={() => {
-              void files.refetch();
-            }}
-          >
-            <RefreshCw size={14} aria-hidden className={files.isFetching ? styles.spinning : undefined} />
-            Refresh
-          </Button>
-        }
-      />
-
+    <div className={styles.page}>
       <div className={styles.toolbar}>
-        <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
+        <nav className={styles.breadcrumbs} aria-label="Folder">
           <Link to="/files" className={styles.crumbLink}>
             downloads
           </Link>
@@ -174,11 +145,24 @@ export function FilesPage() {
             </span>
           ))}
         </nav>
-        {files.data ? (
-          <p className={styles.counts}>
-            {pluralize(folderCount, 'folder')} · {pluralize(fileCount, 'file')}
-          </p>
-        ) : null}
+        <div className={styles.toolbarEnd}>
+          {files.data ? (
+            <p className={styles.counts}>
+              {pluralize(folderCount, 'folder')} · {pluralize(fileCount, 'file')}
+            </p>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={files.isFetching}
+            onClick={() => {
+              void files.refetch();
+            }}
+          >
+            <RefreshCw size={13} aria-hidden className={files.isFetching ? styles.spinning : undefined} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {files.isError ? (

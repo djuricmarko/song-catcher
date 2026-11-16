@@ -37,9 +37,9 @@ describe('api client', () => {
     ['searchMusic', () => api.searchMusic('track', 'abba'), '/api/search', { type: 'track', query: 'abba' }],
     [
       'startDownload',
-      () => api.startDownload({ type: 'album', music_id: 5, add_to_playlist: true, create_zip: false }),
+      () => api.startDownload({ type: 'album', music_id: 5, add_to_playlist: true, title: 'LP', subtitle: 'Band' }),
       '/api/download',
-      { type: 'album', music_id: 5, add_to_playlist: true, create_zip: false },
+      { type: 'album', music_id: 5, add_to_playlist: true, title: 'LP', subtitle: 'Band' },
     ],
     [
       'startYoutubeDownload',
@@ -49,21 +49,15 @@ describe('api client', () => {
     ],
     [
       'startYoutubePlaylistDownload',
-      () => api.startYoutubePlaylistDownload('https://y/playlist?list=1', false, true),
+      () => api.startYoutubePlaylistDownload('https://y/playlist?list=1', false),
       '/api/playlist/youtube',
-      { url: 'https://y/playlist?list=1', add_to_playlist: false, create_zip: true },
+      { url: 'https://y/playlist?list=1', add_to_playlist: false },
     ],
     [
       'startPlaylistDownload',
-      () => api.startPlaylistDownload('123', false, true),
+      () => api.startPlaylistDownload('123', false),
       '/api/playlist/deezer',
-      { playlist_url: '123', add_to_playlist: false, create_zip: true },
-    ],
-    [
-      'startFavoritesDownload',
-      () => api.startFavoritesDownload('42', true, true),
-      '/api/favorites/deezer',
-      { user_id: '42', add_to_playlist: true, create_zip: true },
+      { playlist_url: '123', add_to_playlist: false },
     ],
   ])('%s POSTs a JSON body', async (_name, call, expectedUrl, expectedBody) => {
     const fetchMock = vi.fn(async () => jsonResponse({ task_id: 1 }));

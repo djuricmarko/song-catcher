@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 
 import { childEnvironment, childStderr, wasKilled } from '../lib/child-process.js';
@@ -20,6 +21,12 @@ export interface YoutubeDlOptions {
   ffmpegPath?: string;
   proxyUrl?: string;
   timeoutMs?: number;
+  onInfo?: ((info: YoutubeVideoInfo) => void) | undefined;
+}
+
+export interface YoutubeVideoInfo {
+  title: string;
+  uploadDate: string | undefined;
 }
 
 function isAbsolutePath(line: string): boolean {
@@ -48,19 +55,54 @@ function pushTargetArguments(args: string[], options: { url: string; proxyUrl?: 
   args.push('--', options.url);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function textField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function parseYtDlpInfo(line: string): YoutubeVideoInfo | undefined {
+  if (!line.startsWith('{')) {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const title = textField(parsed, 'title');
+  if (!title) {
+    return undefined;
+  }
+  const date = /^(\d{4})(\d{2})(\d{2})$/.exec(textField(parsed, 'upload_date') ?? '');
+  return { title, uploadDate: date ? `${date[1]}-${date[2]}-${date[3]}` : undefined };
+}
+
 async function runYtDlp(
   executable: string,
   args: string[],
   timeoutMs: number,
   maxBuffer: number,
+  onLine?: (line: string) => void,
 ): Promise<{ stdout: string; stderr: string }> {
   try {
-    return await promisify(execFile)(executable, args, {
+    const running = promisify(execFile)(executable, args, {
       maxBuffer,
       env: childEnvironment(),
       timeout: timeoutMs,
       killSignal: 'SIGKILL',
     });
+    if (onLine && running.child.stdout) {
+      createInterface({ input: running.child.stdout }).on('line', onLine);
+    }
+    return await running;
   } catch (error) {
     if (wasKilled(error)) {
       throw new YoutubeDlError(`yt-dlp did not finish within ${Math.round(timeoutMs / 1000)} s`, {
@@ -89,6 +131,8 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     '--embed-metadata',
     '--no-embed-chapters',
     '--print',
+    'before_dl:%(.{title,upload_date})j',
+    '--print',
     'after_move:filepath',
     '--no-simulate',
     // A watch URL with &list=... would otherwise download the whole playlist,
@@ -102,11 +146,19 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
   }
   pushTargetArguments(args, options);
 
+  const { onInfo } = options;
   const { stdout, stderr } = await runYtDlp(
     options.executable,
     args,
     options.timeoutMs ?? 30 * 60_000,
     16 * 1024 * 1024,
+    onInfo &&
+      ((line) => {
+        const info = parseYtDlpInfo(line.trim());
+        if (info) {
+          onInfo(info);
+        }
+      }),
   );
 
   const filename = parseYtDlpOutput(stdout);
@@ -149,15 +201,6 @@ export interface YoutubePlaylistOptions {
   maxEntries: number;
   proxyUrl?: string;
   timeoutMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function textField(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function isHttpUrl(value: string | undefined): value is string {

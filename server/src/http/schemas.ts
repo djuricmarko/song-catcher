@@ -1,7 +1,6 @@
 import type {
   DeezerPlaylistDownloadRequest,
   DownloadRequest,
-  FavoritesDownloadRequest,
   SearchRequest,
   YoutubeDownloadRequest,
   YoutubePlaylistDownloadRequest,
@@ -17,6 +16,8 @@ const httpUrl = z
   .pipe(z.url())
   .refine((value) => value.startsWith('http'), 'must start with http');
 
+const taskText = z.string().trim().min(1).max(300);
+
 export const searchSchema = z
   .object({
     type: z.enum(SEARCH_TYPES),
@@ -29,7 +30,8 @@ export const downloadSchema = z
     type: z.enum(['track', 'album']),
     music_id: z.coerce.number().int().positive(),
     add_to_playlist: z.boolean(),
-    create_zip: z.boolean(),
+    title: taskText.optional(),
+    subtitle: taskText.optional(),
   })
   .strict() satisfies ZodType<DownloadRequest>;
 
@@ -44,7 +46,6 @@ export const youtubePlaylistSchema = z
   .object({
     url: httpUrl,
     add_to_playlist: z.boolean(),
-    create_zip: z.boolean(),
   })
   .strict() satisfies ZodType<YoutubePlaylistDownloadRequest>;
 
@@ -52,17 +53,8 @@ export const deezerPlaylistSchema = z
   .object({
     playlist_url: z.string().trim().min(1, 'must not be empty'),
     add_to_playlist: z.boolean(),
-    create_zip: z.boolean(),
   })
   .strict() satisfies ZodType<DeezerPlaylistDownloadRequest>;
-
-export const favoritesSchema = z
-  .object({
-    user_id: z.string().trim().regex(/^\d+$/, 'must be a numeric string'),
-    add_to_playlist: z.boolean(),
-    create_zip: z.boolean(),
-  })
-  .strict() satisfies ZodType<FavoritesDownloadRequest>;
 
 export const filesQuerySchema = z.object({
   path: z.string().optional(),

@@ -1,178 +1,241 @@
-import { Tabs } from '@base-ui/react/tabs';
-import { ArrowRight, Heart, ListMusic } from 'lucide-react';
-import { useState, type SubmitEvent } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { startFavoritesDownload, startPlaylistDownload } from '../../api/client';
-import { PageHeader } from '../../components/PageHeader';
-import { PasteButton } from '../../components/PasteButton';
-import { Button } from '../../components/ui/Button';
-import { Checkbox } from '../../components/ui/Checkbox';
-import { Input } from '../../components/ui/Input';
-import { Panel } from '../../components/ui/Panel';
+import type { DownloadRequest, SearchResultDto, SearchType } from '@song-catcher/shared';
+
+import { searchMusic, startDownload, startPlaylistDownload } from '../../api/client';
+import { Composer, ComposerStage } from '../../components/Composer';
+import { EmptyState } from '../../components/EmptyState';
+import { Select, type SelectOption } from '../../components/ui/Select';
+import { ToggleChip } from '../../components/ui/ToggleChip';
 import { useAppConfig } from '../../hooks/useAppConfig';
 import { useEnqueue } from '../../hooks/useEnqueue';
-import { dismissKeyboard } from '../../lib/dismissKeyboard';
+import { usePreviewPlayer } from '../../hooks/usePreviewPlayer';
+import { errorMessage } from '../../lib/errors';
+import { AlbumTracklist, type AlbumTracks } from './AlbumTracklist';
+import { SearchResults } from './SearchResults';
 
 import styles from './DeezerPage.module.css';
 
-type Tab = 'playlist' | 'favorites';
+type Mode = 'artist' | 'album' | 'track' | 'playlist';
+
+const MODES: Array<SelectOption<Mode>> = [
+  { value: 'artist', label: 'Artist' },
+  { value: 'album', label: 'Album' },
+  { value: 'track', label: 'Tracks' },
+  { value: 'playlist', label: 'Playlist' },
+];
+
+function parseDeezerId(value: string | number): number | undefined {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+function trackLabel(track: SearchResultDto): Pick<DownloadRequest, 'title' | 'subtitle'> {
+  return {
+    title: [track.artist, track.title].filter(Boolean).join(' - ') || undefined,
+    subtitle: track.album || undefined,
+  };
+}
 
 export function DeezerPage() {
-  const appConfig = useAppConfig();
-  const mpdEnabled = appConfig.data?.useMpd ?? false;
-  const [tab, setTab] = useState<Tab>('playlist');
-  const [playlistUrl, setPlaylistUrl] = useState('');
-  const [userId, setUserId] = useState('');
+  const mpdEnabled = useAppConfig().data?.useMpd ?? false;
+  const [mode, setMode] = useState<Mode>('track');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResultDto[]>([]);
+  const [albumTracks, setAlbumTracks] = useState<AlbumTracks | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [addToPlaylist, setAddToPlaylist] = useState(false);
-  const [createZip, setCreateZip] = useState(false);
-  const { busy, enqueue } = useEnqueue();
+  const latestSearch = useRef(0);
+  const preview = usePreviewPlayer();
+  const { busy: downloading, enqueue } = useEnqueue();
 
-  function onPlaylistSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = playlistUrl.trim();
-    if (!value) {
-      toast.error('Enter a Deezer playlist URL or id');
+  async function search(type: SearchType, searchQuery: string, onFound: (found: SearchResultDto[]) => void) {
+    const searchId = ++latestSearch.current;
+    const isLatest = () => searchId === latestSearch.current;
+
+    setSearching(true);
+    try {
+      const found = await searchMusic(type, searchQuery);
+      if (isLatest()) {
+        onFound(found);
+      }
+    } catch (error) {
+      if (isLatest()) {
+        toast.error(errorMessage(error));
+      }
+    } finally {
+      if (isLatest()) {
+        setSearching(false);
+      }
+    }
+  }
+
+  function runSearch(type: SearchType, searchQuery: string) {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      toast.error('Enter a search query first');
       return;
     }
 
-    dismissKeyboard();
-    void enqueue(() => startPlaylistDownload(value, addToPlaylist, createZip), {
+    void search(type, trimmed, (found) => {
+      setResults(found);
+      setSearched(true);
+      if (found.length === 0) {
+        toast.info('No results found');
+      }
+    });
+  }
+
+  function changeMode(next: Mode) {
+    latestSearch.current += 1;
+    setMode(next);
+    setResults([]);
+    setAlbumTracks(null);
+    setSearched(false);
+    setSearching(false);
+  }
+
+  function submit() {
+    if (mode !== 'playlist') {
+      setAlbumTracks(null);
+      runSearch(mode, query);
+      return;
+    }
+
+    const playlist = query.trim();
+    if (!playlist) {
+      toast.error('Enter a Deezer playlist link or id');
+      return;
+    }
+    void enqueue(() => startPlaylistDownload(playlist, addToPlaylist), {
       successMessage: 'Playlist download queued',
       onQueued: () => {
-        setPlaylistUrl('');
+        setQuery('');
       },
     });
   }
 
-  function onFavoritesSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = userId.trim();
-    if (!/^\d+$/.test(value)) {
-      toast.error('The Deezer user id must be numeric');
+  function showAlbumTracks(result: SearchResultDto) {
+    const albumId = parseDeezerId(result.album_id || result.id);
+    if (albumId === undefined) {
+      toast.error('This album has no valid Deezer id');
       return;
     }
 
-    dismissKeyboard();
-    void enqueue(() => startFavoritesDownload(value, addToPlaylist, createZip), {
-      successMessage: 'Favorites download queued',
-      onQueued: () => {
-        setUserId('');
-      },
+    void search('album_track', String(albumId), (tracks) => {
+      setAlbumTracks({
+        albumId,
+        title: result.album || result.title || `Album ${albumId}`,
+        artist: result.artist,
+        tracks,
+      });
     });
   }
 
-  const submitButton = (
-    <Button type="submit" size="lg" disabled={busy} className={styles.submit}>
-      {busy ? 'Queueing…' : 'Download'}
-      <ArrowRight size={16} aria-hidden />
-    </Button>
-  );
+  function showArtist(type: 'artist_top' | 'artist_album', result: SearchResultDto) {
+    setAlbumTracks(null);
+    runSearch(type, result.id);
+  }
 
-  const options = (
-    <div className={styles.options}>
-      {mpdEnabled ? (
-        <Checkbox checked={addToPlaylist} onCheckedChange={setAddToPlaylist} label="Add to MPD playlist" />
-      ) : null}
-      <Checkbox
-        checked={createZip}
-        onCheckedChange={setCreateZip}
-        label="Pack into a zip"
-        hint="One archive with every song and the m3u8"
-      />
-    </div>
-  );
+  function queueDownload(
+    type: DownloadRequest['type'],
+    musicId: number | string,
+    label: Pick<DownloadRequest, 'title' | 'subtitle'>,
+  ) {
+    const id = parseDeezerId(musicId);
+    if (id === undefined) {
+      toast.error('This result has no valid Deezer id');
+      return;
+    }
+
+    void enqueue(() => startDownload({ type, music_id: id, add_to_playlist: addToPlaylist, ...label }), {
+      successMessage: 'Download queued',
+    });
+  }
+
+  const busy = searching || downloading;
+
+  function renderResults() {
+    if (albumTracks) {
+      return (
+        <AlbumTracklist
+          album={albumTracks}
+          busy={busy}
+          downloading={downloading}
+          preview={preview}
+          onBack={() => {
+            setAlbumTracks(null);
+          }}
+          onDownloadAlbum={(album) => {
+            queueDownload('album', album.albumId, { title: album.title, subtitle: album.artist || undefined });
+          }}
+          onDownloadTrack={(track) => {
+            queueDownload('track', track.id, trackLabel(track));
+          }}
+        />
+      );
+    }
+    if (results.length > 0) {
+      return (
+        <SearchResults
+          results={results}
+          busy={busy}
+          preview={preview}
+          onDownloadTrack={(result) => {
+            queueDownload('track', result.id, trackLabel(result));
+          }}
+          onDownloadAlbum={(result) => {
+            queueDownload('album', result.album_id || result.id, {
+              title: result.album || undefined,
+              subtitle: result.artist || undefined,
+            });
+          }}
+          onShowAlbumTracks={showAlbumTracks}
+          onArtistTop={(result) => {
+            showArtist('artist_top', result);
+          }}
+          onArtistAlbums={(result) => {
+            showArtist('artist_album', result);
+          }}
+        />
+      );
+    }
+    if (searched && !searching) {
+      return (
+        <div className={styles.empty}>
+          <EmptyState title="Nothing on this tape">
+            Try a different spelling, or switch between tracks, albums and artists.
+          </EmptyState>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  const content = renderResults();
 
   return (
-    <div>
-      <PageHeader
-        title={
+    <ComposerStage raised={content !== null}>
+      <Composer
+        value={query}
+        onValueChange={setQuery}
+        onSubmit={submit}
+        busy={mode === 'playlist' ? downloading : searching}
+        placeholder={mode === 'playlist' ? 'Paste a Deezer playlist link' : 'Search'}
+        inputLabel={mode === 'playlist' ? 'Deezer playlist link' : 'Search query'}
+        submitLabel={mode === 'playlist' ? 'Download playlist' : 'Search'}
+        footer={
           <>
-            Bring the <em>whole crate</em>
+            <Select aria-label="Search type" value={mode} onValueChange={changeMode} options={MODES} />
+            {mpdEnabled ? (
+              <ToggleChip pressed={addToPlaylist} onPressedChange={setAddToPlaylist} label="Add to MPD playlist" />
+            ) : null}
           </>
         }
-        description="Download a public Deezer playlist, or every song a user has hearted. Playlists come with an m3u8 file."
       />
-
-      <Tabs.Root
-        value={tab}
-        onValueChange={(value) => {
-          setTab(value as Tab);
-        }}
-      >
-        <Tabs.List className={styles.tabList}>
-          <Tabs.Tab value="playlist" className={styles.tab}>
-            <ListMusic size={16} aria-hidden />
-            Playlist
-          </Tabs.Tab>
-          <Tabs.Tab value="favorites" className={styles.tab}>
-            <Heart size={16} aria-hidden />
-            Favorites
-          </Tabs.Tab>
-          <Tabs.Indicator className={styles.indicator} />
-        </Tabs.List>
-
-        <Panel className={styles.panel}>
-          <Tabs.Panel value="playlist">
-            <form onSubmit={onPlaylistSubmit} className={styles.form}>
-              <label className={styles.fieldLabel} htmlFor="playlist-url">
-                Playlist link or id
-              </label>
-              <div className={styles.row}>
-                <Input
-                  id="playlist-url"
-                  size="lg"
-                  value={playlistUrl}
-                  onChange={(event) => {
-                    setPlaylistUrl(event.target.value);
-                  }}
-                  placeholder="https://www.deezer.com/playlist/…"
-                  aria-label="Deezer playlist URL"
-                  inputMode="url"
-                  enterKeyHint="go"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  trailing={
-                    playlistUrl ? undefined : <PasteButton onPaste={setPlaylistUrl} label="Paste playlist link" />
-                  }
-                />
-                {submitButton}
-              </div>
-              {options}
-            </form>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="favorites">
-            <form onSubmit={onFavoritesSubmit} className={styles.form}>
-              <label className={styles.fieldLabel} htmlFor="user-id">
-                Deezer user id
-              </label>
-              <div className={styles.row}>
-                <Input
-                  id="user-id"
-                  size="lg"
-                  value={userId}
-                  onChange={(event) => {
-                    setUserId(event.target.value);
-                  }}
-                  placeholder="e.g. 123456789"
-                  inputMode="numeric"
-                  enterKeyHint="go"
-                  autoComplete="off"
-                  aria-label="Deezer user id"
-                />
-                {submitButton}
-              </div>
-              <p className={styles.help}>
-                The number at the end of a profile link: deezer.com/profile/<mark>123456789</mark>
-              </p>
-              {options}
-            </form>
-          </Tabs.Panel>
-        </Panel>
-      </Tabs.Root>
-    </div>
+      {content}
+    </ComposerStage>
   );
 }

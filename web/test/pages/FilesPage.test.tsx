@@ -66,7 +66,7 @@ describe('FilesPage', () => {
     renderFiles();
     await userEvent.click(await screen.findByRole('button', { name: 'My Album' }));
     expect(await screen.findByText('a.mp3')).toBeInTheDocument();
-    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    const breadcrumb = screen.getByRole('navigation', { name: 'Folder' });
     expect(breadcrumb).toHaveTextContent('downloads/Artist/My Album');
     expect(screen.getByRole('link', { name: 'Artist' })).toHaveAttribute('href', '/files/Artist');
     expect(screen.getByRole('link', { name: 'My Album' })).toHaveAttribute('href', '/files/Artist/My%20Album');

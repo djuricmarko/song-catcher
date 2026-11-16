@@ -22,13 +22,7 @@ import { writeSongMetadata } from './metadata.js';
 import { apiErrorText, extractAppState, extractPlaylistId, mapSearchResult, type AlbumContext } from './parse.js';
 import { PictureCache } from './picture-cache.js';
 import { createProxyAgent } from './proxy.js';
-import type {
-  FavoritesResponse,
-  MediaResponse,
-  PlaylistResponse,
-  SearchResponse,
-  UserDataResponse,
-} from './responses.js';
+import type { MediaResponse, PlaylistResponse, SearchResponse, UserDataResponse } from './responses.js';
 import {
   SEARCH_TYPES,
   type DeezerAppState,
@@ -402,38 +396,6 @@ export class DeezerClient {
       timeout: { request: 10_000 },
     });
     return response.url;
-  }
-
-  public async getDeezerFavorites(userId: string): Promise<string[]> {
-    if (!/^\d+$/.test(userId)) {
-      throw new DeezerApiException(`User id '${userId}' must be numeric`);
-    }
-
-    const ids: string[] = [];
-    let url: string | undefined = `${PUBLIC_API_URL}/user/${userId}/tracks?limit=10000000000`;
-    let total = 0;
-
-    for (let page = 0; url && page < 1000; page += 1) {
-      const body = await this.fetchFavoritesPage(userId, url);
-      if (body.error) {
-        throw new DeezerApiException(`Upstream API error for user ${userId}: ${apiErrorText(body.error)}`);
-      }
-
-      for (const song of body.data ?? []) {
-        ids.push(String(song.id));
-      }
-      total = body.total ?? total;
-      url = body.next;
-    }
-
-    this.logger.info({ userId, total, fetched: ids.length }, 'fetched Deezer favorites');
-    return ids;
-  }
-
-  private fetchFavoritesPage(userId: string, url: string): Promise<FavoritesResponse> {
-    return describeFailure(`Could not retrieve favorite songs for user ${userId}`, () =>
-      this.http.get(url).json<FavoritesResponse>(),
-    );
   }
 
   public getSongUrl(trackToken: string): Promise<SongSource> {

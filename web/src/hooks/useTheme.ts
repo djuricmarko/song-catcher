@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
+import { desktopApp } from '../lib/desktop';
+
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 const STORAGE_KEY = 'dd-theme';
 const listeners = new Set<() => void>();
 
 function readPreference(): ThemePreference {
+  if (desktopApp()) {
+    return 'system';
+  }
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
@@ -24,7 +29,7 @@ export function applyTheme(preference: ThemePreference = readPreference()): void
   document.documentElement.dataset.theme = resolved;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta) {
-    meta.content = { light: '#fcfcfc', dark: '#000000' }[resolved];
+    meta.content = { light: '#ffffff', dark: '#000000' }[resolved];
   }
 }
 

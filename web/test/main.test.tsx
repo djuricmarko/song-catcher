@@ -2,8 +2,7 @@ import { act, screen } from '@testing-library/react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPACT_LAYOUT_QUERY } from '../src/hooks/useMediaQuery';
-import { mockFetch, setMatchMedia } from './utils';
+import { mockFetch } from './utils';
 
 let root: HTMLDivElement | null = null;
 
@@ -38,16 +37,10 @@ describe('main', () => {
     await expect(import('../src/main')).rejects.toThrow('Missing #root element');
   });
 
-  it('mounts the app with a bottom-right toaster on wide screens', async () => {
+  it('mounts the app with a bottom-right toaster', async () => {
     const toaster = await boot();
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Find something worth keeping');
+    expect(await screen.findByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('New Download');
     expect(toaster).toHaveAttribute('data-x-position', 'right');
     expect(toaster).toHaveAttribute('data-y-position', 'bottom');
-  });
-
-  it('centres the toaster above the tab bar on compact screens', async () => {
-    setMatchMedia({ [COMPACT_LAYOUT_QUERY]: true });
-    const toaster = await boot();
-    expect(toaster).toHaveAttribute('data-x-position', 'center');
   });
 });

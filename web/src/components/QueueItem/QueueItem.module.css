@@ -1,0 +1,144 @@
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-xs);
+  cursor: default;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.item:hover,
+.item[data-popup-open] {
+  background-color: var(--surface-hover);
+}
+
+.head,
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1rem;
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.state {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.active .state {
+  color: var(--ink-strong);
+}
+
+.done {
+  color: var(--ok);
+}
+
+.failed {
+  color: var(--bad);
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+.ring {
+  transform: rotate(-90deg);
+}
+
+.ring circle:first-child {
+  opacity: 0.25;
+}
+
+.ring circle:last-child {
+  transition: stroke-dasharray 300ms var(--ease);
+}
+
+.title {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.active .title {
+  color: var(--ink-strong);
+}
+
+.subtitle {
+  overflow: hidden;
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.kind {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+}
+
+.positioner {
+  z-index: 40;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  width: max-content;
+  max-width: 20rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-popup);
+}
+
+.cardTitle {
+  font-size: var(--text-sm);
+  color: var(--ink-strong);
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.detail svg {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+
+.exception {
+  max-width: 18rem;
+  font-size: var(--text-2xs);
+  color: var(--bad);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

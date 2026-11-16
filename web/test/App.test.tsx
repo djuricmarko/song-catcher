@@ -1,116 +1,133 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../src/App';
 import { MockEventSource, makeTask, mockFetch, renderWithProviders } from './utils';
 
-function setup(route = '/', useMpd = false) {
+function setup(route = '/') {
   mockFetch({
-    'GET /config': { version: '9.9.9', useMpd, urlPrefix: '' },
+    'GET /config': { version: '9.9.9', useMpd: false, urlPrefix: '' },
     'GET /queue': [],
     'GET /debug': { debug_msg: 'log' },
     'GET /files?path=': { path: '', entries: [] },
+    'GET /files?path=some%2Fdir': { path: 'some/dir', entries: [] },
   });
   renderWithProviders(<App />, { route, withQueue: true });
 }
 
-const heading = () => screen.getByRole('heading', { level: 1 });
+const breadcrumb = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
 
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
 });
 
 describe('App', () => {
-  it('renders the shell with version and search page', async () => {
+  it('opens on a new YouTube download with the queue beside it', () => {
     setup();
-    expect(await screen.findByText('v9.9.9')).toBeInTheDocument();
-    expect(heading()).toHaveTextContent('Find something worth keeping');
-    expect(screen.queryByText('MPD linked')).not.toBeInTheDocument();
+    expect(breadcrumb()).toHaveTextContent('YouTube/New Download');
+    expect(screen.getByLabelText('Video URL')).toBeInTheDocument();
+    expect(screen.getByText('No downloads in progress')).toBeInTheDocument();
     expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
   });
 
-  it('shows a placeholder version until config loads, and MPD status', async () => {
-    setup('/', true);
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(await screen.findByText('MPD linked')).toBeInTheDocument();
-  });
-
-  it('navigates with sidebar and tab bar links', async () => {
-    setup();
-    const main = screen.getByRole('navigation', { name: 'Main' });
-    await userEvent.click(within(main).getByRole('link', { name: /Video links/ }));
-    expect(heading()).toHaveTextContent('Rip the audio from anywhere');
-
-    const tabs = screen.getByRole('navigation', { name: 'Primary' });
-    await userEvent.click(within(tabs).getByRole('link', { name: /Playlists/ }));
-    expect(heading()).toHaveTextContent('Bring the whole crate');
-
-    await userEvent.click(within(main).getByRole('link', { name: 'Logs' }));
-    expect(heading()).toHaveTextContent('Under the hood');
-  });
-
   it.each([
-    ['/files', 'Everything on the shelf'],
-    ['/files/some/dir', 'Everything on the shelf'],
-    ['/queue', 'On the turntable'],
-    ['/nope', 'Find something worth keeping'],
-  ])('routes %s', (route, title) => {
+    ['/youtube', 'YouTube/New Download'],
+    ['/deezer', 'Deezer/New Download'],
+    ['/files', 'Library'],
+    ['/files/some/dir', 'Library'],
+    ['/debug', 'Logs'],
+    ['/nope', 'YouTube/New Download'],
+  ])('routes %s', (route, crumbs) => {
     setup(route);
-    expect(heading()).toHaveTextContent(title);
+    expect(breadcrumb()).toHaveTextContent(crumbs);
   });
 
-  it('switches pages with Ctrl+Shift+digit', () => {
+  it('starts a new download for the picked source', async () => {
     setup();
-    fireEvent.keyDown(window, { code: 'Digit6', key: '^', ctrlKey: true, shiftKey: true });
-    expect(heading()).toHaveTextContent('On the turntable');
-    fireEvent.keyDown(window, { code: 'Digit4', key: '$', ctrlKey: true, shiftKey: true });
-    expect(heading()).toHaveTextContent('Everything on the shelf');
+    await userEvent.click(screen.getByRole('button', { name: 'New download' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New download' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Deezer' }));
+    expect(breadcrumb()).toHaveTextContent('Deezer/New Download');
+    expect(screen.getByLabelText('Search query')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the library and the logs from the sidebar footer', async () => {
+    setup();
+    await userEvent.click(screen.getByRole('link', { name: 'Library' }));
+    expect(breadcrumb()).toHaveTextContent('Library');
+    await userEvent.click(screen.getByRole('link', { name: 'Logs' }));
+    expect(breadcrumb()).toHaveTextContent('Logs');
+  });
+
+  it('switches views with Ctrl+Shift+digit', () => {
+    setup();
+    fireEvent.keyDown(window, { code: 'Digit2', key: '@', ctrlKey: true, shiftKey: true });
+    expect(breadcrumb()).toHaveTextContent('Deezer/New Download');
+    fireEvent.keyDown(window, { code: 'Digit3', key: '#', ctrlKey: true, shiftKey: true });
+    expect(breadcrumb()).toHaveTextContent('Library');
     fireEvent.keyDown(window, { code: 'Digit7', key: '&', ctrlKey: true, shiftKey: true });
     fireEvent.keyDown(window, { code: 'Digit1', key: '!', ctrlKey: true, shiftKey: true, altKey: true });
     fireEvent.keyDown(window, { code: 'Digit1', key: '1', ctrlKey: true });
-    expect(heading()).toHaveTextContent('Everything on the shelf');
+    expect(breadcrumb()).toHaveTextContent('Library');
   });
 
-  it('focuses the search box with Ctrl+M when present', () => {
-    setup();
-    const input = screen.getByRole('searchbox', { name: 'Search query' });
+  it('focuses the composer with Ctrl+M when there is one', () => {
+    setup('/deezer');
     fireEvent.keyDown(window, { key: 'M', ctrlKey: true });
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement).toBe(screen.getByLabelText('Search query'));
   });
 
-  it('ignores Ctrl+M off the search page and with modifiers', () => {
-    setup('/queue');
+  it('ignores Ctrl+M without a composer and with other modifiers', () => {
+    setup('/debug');
     const event = new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
     fireEvent.keyDown(window, { key: 'm', ctrlKey: true, altKey: true });
-    expect(heading()).toHaveTextContent('On the turntable');
+    expect(breadcrumb()).toHaveTextContent('Logs');
   });
 
-  it('shows pending task counts in the nav and tab badge', async () => {
+  it('hides the sidebar and remembers it', async () => {
     setup();
-    const source = MockEventSource.latest();
     act(() => {
-      source.emit('snapshot', [
-        makeTask({ id: 1, state: 'active' }),
-        makeTask({ id: 2, state: 'waiting' }),
-        makeTask({ id: 3, state: 'failed' }),
-      ]);
+      MockEventSource.latest().emit('snapshot', [makeTask({ id: 1, title: 'Queued song' })]);
     });
-    expect(screen.getByLabelText('2 in progress')).toHaveTextContent('2');
-    const main = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(main).getByRole('link', { name: /Queue/ })).toHaveTextContent('2');
+    expect(screen.getByText('Queued song')).toBeInTheDocument();
 
-    act(() => {
-      source.emit(
-        'snapshot',
-        Array.from({ length: 120 }, (_, index) => makeTask({ id: index, state: 'waiting' })),
-      );
-    });
-    await waitFor(() => {
-      expect(screen.getByLabelText('120 in progress')).toHaveTextContent('99+');
-    });
+    await userEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
+    expect(screen.queryByText('Queued song')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('sc-sidebar')).toBe('collapsed');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show sidebar' }));
+    expect(screen.getByText('Queued song')).toBeInTheDocument();
+    expect(window.localStorage.getItem('sc-sidebar')).toBe('open');
+  });
+
+  it('starts with the sidebar hidden when it was left that way', () => {
+    window.localStorage.setItem('sc-sidebar', 'collapsed');
+    setup();
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New download' })).not.toBeInTheDocument();
+  });
+
+  it('offers the application menu where the desktop window has no menu bar', async () => {
+    const showMenu = vi.fn();
+    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn(), showMenu };
+    try {
+      setup();
+      const button = screen.getByRole('button', { name: 'Menu' });
+      vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(new DOMRect(900, 11, 26, 26));
+      await userEvent.click(button);
+      expect(showMenu).toHaveBeenCalledWith(900, 41);
+    } finally {
+      delete window.songCatcherApp;
+    }
+  });
+
+  it('has no menu button in a browser', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
   });
 
   it('removes the keyboard listener on unmount', () => {

@@ -4,7 +4,6 @@ import type {
   DebugResponse,
   DeezerPlaylistDownloadRequest,
   DownloadRequest,
-  FavoritesDownloadRequest,
   FilesResponse,
   QueueTask,
   SearchRequest,
@@ -81,35 +80,14 @@ export function startYoutubeDownload(url: string, addToPlaylist: boolean): Promi
   return post<TaskAcceptedResponse>('/youtubedl', body);
 }
 
-export function startYoutubePlaylistDownload(
-  url: string,
-  addToPlaylist: boolean,
-  createZip: boolean,
-): Promise<TaskAcceptedResponse> {
-  const body: YoutubePlaylistDownloadRequest = { url, add_to_playlist: addToPlaylist, create_zip: createZip };
+export function startYoutubePlaylistDownload(url: string, addToPlaylist: boolean): Promise<TaskAcceptedResponse> {
+  const body: YoutubePlaylistDownloadRequest = { url, add_to_playlist: addToPlaylist };
   return post<TaskAcceptedResponse>('/playlist/youtube', body);
 }
 
-export function startPlaylistDownload(
-  playlistUrl: string,
-  addToPlaylist: boolean,
-  createZip: boolean,
-): Promise<TaskAcceptedResponse> {
-  const body: DeezerPlaylistDownloadRequest = {
-    playlist_url: playlistUrl,
-    add_to_playlist: addToPlaylist,
-    create_zip: createZip,
-  };
+export function startPlaylistDownload(playlistUrl: string, addToPlaylist: boolean): Promise<TaskAcceptedResponse> {
+  const body: DeezerPlaylistDownloadRequest = { playlist_url: playlistUrl, add_to_playlist: addToPlaylist };
   return post<TaskAcceptedResponse>('/playlist/deezer', body);
-}
-
-export function startFavoritesDownload(
-  userId: string,
-  addToPlaylist: boolean,
-  createZip: boolean,
-): Promise<TaskAcceptedResponse> {
-  const body: FavoritesDownloadRequest = { user_id: userId, add_to_playlist: addToPlaylist, create_zip: createZip };
-  return post<TaskAcceptedResponse>('/favorites/deezer', body);
 }
 
 export function getQueue(): Promise<QueueTask[]> {

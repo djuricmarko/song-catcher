@@ -24,7 +24,7 @@ describe('applyTheme', () => {
     expect(meta.content).toBe('#000000');
     applyTheme('light');
     expect(document.documentElement.dataset.theme).toBe('light');
-    expect(meta.content).toBe('#fcfcfc');
+    expect(meta.content).toBe('#ffffff');
   });
 
   it('resolves system from prefers-color-scheme', () => {
@@ -92,5 +92,18 @@ describe('useTheme', () => {
       });
     }).not.toThrow();
     expect(result.current.preference).toBe('system');
+  });
+
+  it('follows the system inside the desktop app, where the theme is a desktop setting', () => {
+    window.localStorage.setItem('dd-theme', 'light');
+    setMatchMedia({ [DARK]: true });
+    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn() };
+    try {
+      const { result } = renderHook(() => useTheme());
+      expect(result.current.preference).toBe('system');
+      expect(document.documentElement.dataset.theme).toBe('dark');
+    } finally {
+      delete window.songCatcherApp;
+    }
   });
 });

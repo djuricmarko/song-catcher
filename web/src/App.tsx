@@ -1,177 +1,66 @@
-import { Disc3, FolderOpen, ListMusic, ListTodo, Search, Terminal, Video, type LucideIcon } from 'lucide-react';
-import { useEffect } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { ChartNoAxesColumn, Ellipsis, FolderOpen, PanelLeft } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
-import { ThemeSwitch } from './components/ThemeSwitch';
-import { useAppConfig } from './hooks/useAppConfig';
+import { Sidebar } from './components/Sidebar';
+import { SourceLabel } from './components/SourceLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useQueue } from './hooks/useQueue';
 import { cn } from './lib/cn';
+import { desktopApp } from './lib/desktop';
 import { DebugPage } from './pages/DebugPage';
 import { DeezerPage } from './pages/DeezerPage';
 import { FilesPage } from './pages/FilesPage';
-import { QueuePage } from './pages/QueuePage';
-import { SearchPage } from './pages/SearchPage';
 import { YoutubePage } from './pages/YoutubePage';
 
 import styles from './App.module.css';
 
-interface NavItem {
-  to: string;
-  label: string;
-  tabLabel?: string;
-  icon: LucideIcon;
-  group: 'download' | 'collection' | 'system';
-  end?: boolean;
-}
+const SIDEBAR_STORAGE_KEY = 'sc-sidebar';
 
-const QUEUE_PATH = '/queue';
-const LOGS_PATH = '/debug';
-
-const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Search', tabLabel: 'Search', icon: Search, group: 'download', end: true },
-  { to: '/youtube', label: 'Video links', tabLabel: 'Links', icon: Video, group: 'download' },
-  { to: '/deezer', label: 'Playlists', tabLabel: 'Playlists', icon: ListMusic, group: 'download' },
-  { to: '/files', label: 'Library', tabLabel: 'Library', icon: FolderOpen, group: 'collection' },
-  { to: LOGS_PATH, label: 'Logs', icon: Terminal, group: 'system' },
-  { to: QUEUE_PATH, label: 'Queue', tabLabel: 'Queue', icon: ListTodo, group: 'collection' },
+const VIEWS: Array<{ path: string; crumbs: ReactNode[] }> = [
+  {
+    path: '/youtube',
+    crumbs: [<SourceLabel key="source" source="youtube" className={styles.crumb} />, 'New Download'],
+  },
+  { path: '/deezer', crumbs: [<SourceLabel key="source" source="deezer" className={styles.crumb} />, 'New Download'] },
+  {
+    path: '/files',
+    crumbs: [
+      <span key="library" className={styles.crumb}>
+        <FolderOpen size={14} strokeWidth={1.75} aria-hidden />
+        Library
+      </span>,
+    ],
+  },
+  {
+    path: '/debug',
+    crumbs: [
+      <span key="logs" className={styles.crumb}>
+        <ChartNoAxesColumn size={14} strokeWidth={1.75} aria-hidden />
+        Logs
+      </span>,
+    ],
+  },
 ];
 
-const NAV_PATHS = NAV_ITEMS.map((item) => item.to);
-
-function Brand({ version }: { version?: string }) {
-  return (
-    <div className={styles.brand}>
-      <span className={styles.logo} aria-hidden>
-        <Disc3 size={14} strokeWidth={2} />
-      </span>
-      <p className={styles.appName}>Songcatcher</p>
-      {version === undefined ? null : <span className={styles.version}>{version}</span>}
-    </div>
-  );
+function readSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'collapsed';
+  } catch {
+    return false;
+  }
 }
 
-function SidebarLink({ item, pendingTasks }: { item: NavItem; pendingTasks: number }) {
-  const { to, label, icon: Icon, end } = item;
-  const shortcut = NAV_PATHS.indexOf(to) + 1;
-
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) => cn(styles.navLink, isActive && styles.navLinkActive)}
-      title={`${label} (Ctrl+Shift+${shortcut})`}
-    >
-      <Icon size={15} strokeWidth={1.75} aria-hidden className={styles.navIcon} />
-      <span className={styles.navLabel}>{label}</span>
-      {to === QUEUE_PATH && pendingTasks > 0 ? <span className={styles.navCount}>{pendingTasks}</span> : null}
-    </NavLink>
-  );
-}
-
-function Sidebar({ pendingTasks }: { pendingTasks: number }) {
-  const config = useAppConfig();
-  const groupItems = (group: NavItem['group']) => NAV_ITEMS.filter((item) => item.group === group);
-
-  return (
-    <aside className={styles.sidebar}>
-      <Brand version={config.data ? `v${config.data.version}` : '—'} />
-
-      <nav className={styles.nav} aria-label="Main">
-        {(
-          [
-            ['download', 'Download'],
-            ['collection', 'Collection'],
-          ] as const
-        ).map(([group, heading]) => (
-          <div key={group} className={styles.navGroup}>
-            <p className={styles.navHeading}>{heading}</p>
-            {groupItems(group).map((item) => (
-              <SidebarLink key={item.to} item={item} pendingTasks={pendingTasks} />
-            ))}
-          </div>
-        ))}
-        <div className={cn(styles.navGroup, styles.navGroupEnd)}>
-          {groupItems('system').map((item) => (
-            <SidebarLink key={item.to} item={item} pendingTasks={pendingTasks} />
-          ))}
-        </div>
-      </nav>
-
-      <div className={styles.sidebarFooter}>
-        {config.data?.useMpd ? (
-          <p className={styles.mpd}>
-            <span className={styles.mpdDot} aria-hidden />
-            MPD linked
-          </p>
-        ) : null}
-        <div className={styles.footerRow}>
-          <ThemeSwitch />
-          <p className={styles.shortcutHint}>
-            <kbd>Ctrl</kbd>
-            <kbd>M</kbd>
-            <span>search</span>
-          </p>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function Toolbar({ pendingTasks }: { pendingTasks: number }) {
+function Breadcrumb() {
   const { pathname } = useLocation();
-  const current = NAV_ITEMS.find(({ to, end }) => (end ? pathname === to : pathname.startsWith(to)));
-  const Icon = current?.icon ?? Search;
+  const crumbs = VIEWS.find((view) => pathname.startsWith(view.path))?.crumbs ?? [];
 
   return (
-    <div className={styles.toolbar}>
-      <p className={styles.toolbarTitle}>
-        <Icon size={15} strokeWidth={1.75} aria-hidden />
-        {current?.label ?? 'Search'}
-      </p>
-      {pendingTasks > 0 && pathname !== QUEUE_PATH ? (
-        <NavLink to={QUEUE_PATH} className={styles.toolbarChip}>
-          <span className={styles.toolbarChipDot} aria-hidden />
-          {pendingTasks} downloading
-        </NavLink>
-      ) : null}
-    </div>
-  );
-}
-
-function TopBar() {
-  return (
-    <header className={styles.topbar}>
-      <Brand />
-      <div className={styles.topbarActions}>
-        <NavLink
-          to={LOGS_PATH}
-          className={({ isActive }) => cn(styles.topbarLink, isActive && styles.topbarLinkActive)}
-          aria-label="Logs"
-        >
-          <Terminal size={18} strokeWidth={1.75} aria-hidden />
-        </NavLink>
-        <ThemeSwitch />
-      </div>
-    </header>
-  );
-}
-
-function TabBar({ pendingTasks }: { pendingTasks: number }) {
-  return (
-    <nav className={styles.tabbar} aria-label="Primary">
-      {NAV_ITEMS.filter((item) => item.tabLabel).map(({ to, tabLabel, icon: Icon, end }) => (
-        <NavLink key={to} to={to} end={end} className={({ isActive }) => cn(styles.tab, isActive && styles.tabActive)}>
-          <span className={styles.tabIcon}>
-            <Icon size={20} strokeWidth={1.75} aria-hidden />
-            {to === QUEUE_PATH && pendingTasks > 0 ? (
-              <span className={styles.tabBadge} aria-label={`${pendingTasks} in progress`}>
-                {pendingTasks > 99 ? '99+' : pendingTasks}
-              </span>
-            ) : null}
-          </span>
-          <span className={styles.tabLabel}>{tabLabel}</span>
-        </NavLink>
+    <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+      {crumbs.map((crumb, index) => (
+        <span key={index} className={cn(styles.crumb, index === crumbs.length - 1 && styles.crumbCurrent)}>
+          {index > 0 ? <span aria-hidden>/</span> : null}
+          {crumb}
+        </span>
       ))}
     </nav>
   );
@@ -179,36 +68,77 @@ function TabBar({ pendingTasks }: { pendingTasks: number }) {
 
 export default function App() {
   const { pathname } = useLocation();
-  const { tasks } = useQueue();
-  const pendingTasks = tasks.filter((task) => task.state === 'active' || task.state === 'waiting').length;
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const showMenu = desktopApp()?.showMenu;
 
-  useKeyboardShortcuts(NAV_PATHS);
+  useKeyboardShortcuts(VIEWS.map((view) => view.path));
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    if (viewRef.current) {
+      viewRef.current.scrollTop = 0;
+    }
   }, [pathname]);
 
+  function collapse(next: boolean) {
+    setCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? 'collapsed' : 'open');
+    } catch {}
+  }
+
   return (
-    <div className={styles.shell}>
-      <Sidebar pendingTasks={pendingTasks} />
-      <TopBar />
+    <div className={cn(styles.shell, collapsed && styles.shellCollapsed)}>
+      {collapsed ? null : (
+        <Sidebar
+          onCollapse={() => {
+            collapse(true);
+          }}
+        />
+      )}
 
       <main className={styles.main}>
-        <Toolbar pendingTasks={pendingTasks} />
-        <div className={styles.content}>
+        <header className={cn(styles.header, 'drag-region')}>
+          {collapsed ? (
+            <button
+              type="button"
+              className={cn(styles.headerButton, styles.expand)}
+              aria-label="Show sidebar"
+              title="Show sidebar"
+              onClick={() => {
+                collapse(false);
+              }}
+            >
+              <PanelLeft size={14} strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
+          <Breadcrumb />
+          {showMenu ? (
+            <button
+              type="button"
+              className={cn(styles.headerButton, styles.appMenu)}
+              aria-label="Menu"
+              title="Menu"
+              onClick={(event) => {
+                const { left, bottom } = event.currentTarget.getBoundingClientRect();
+                showMenu(left, bottom + 4);
+              }}
+            >
+              <Ellipsis size={14} strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
+        </header>
+        <div ref={viewRef} className={styles.view}>
           <Routes>
-            <Route path="/" element={<SearchPage />} />
             <Route path="/youtube" element={<YoutubePage />} />
             <Route path="/deezer" element={<DeezerPage />} />
             <Route path="/files/*" element={<FilesPage />} />
-            <Route path={LOGS_PATH} element={<DebugPage />} />
-            <Route path={QUEUE_PATH} element={<QueuePage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/debug" element={<DebugPage />} />
+            <Route path="*" element={<Navigate to="/youtube" replace />} />
           </Routes>
         </div>
       </main>
-
-      <TabBar pendingTasks={pendingTasks} />
     </div>
   );
 }

@@ -37,7 +37,6 @@ describe('loadConfig defaults', () => {
       songsDir: '/tmp/deezer-downloader/songs',
       albumsDir: '/tmp/deezer-downloader/albums',
       playlistsDir: '/tmp/deezer-downloader/playlists',
-      zipsDir: '/tmp/deezer-downloader/zips',
       youtubeDir: '/tmp/deezer-downloader/youtube-dl',
     });
     expect(config.queue).toEqual({ workers: 4, historyLimit: 500 });

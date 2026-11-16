@@ -1,0 +1,10 @@
+.logo {
+  flex-shrink: 0;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-width: 0;
+}

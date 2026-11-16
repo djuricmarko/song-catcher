@@ -8,10 +8,10 @@ desktop app on Linux, Windows and macOS.
 ## Features
 
 - Search Deezer for tracks, albums and artists, and preview tracks before downloading.
-- Download tracks, albums, Deezer playlists and your Deezer favourites, as MP3 or FLAC, tagged and with cover art.
+- Download tracks, albums and Deezer playlists, as MP3 or FLAC, tagged and with cover art.
 - Download audio from YouTube, one video or a whole playlist.
 - Follow downloads in a live queue and browse the downloaded files.
-- Optional ZIP archives, MPD integration, proxy support and HTTP Basic auth.
+- Optional MPD integration, proxy support and HTTP Basic auth.
 
 ## Desktop app
 
@@ -94,7 +94,6 @@ point. The desktop app uses its settings window instead.
 | `DEEZER_SONGS_DIR`            | `${base}/songs`          | Track directory.                                                          |
 | `DEEZER_ALBUMS_DIR`           | `${base}/albums`         | Album directory.                                                          |
 | `DEEZER_PLAYLISTS_DIR`        | `${base}/playlists`      | Playlist directory.                                                       |
-| `DEEZER_ZIPS_DIR`             | `${base}/zips`           | ZIP directory.                                                            |
 | `DEEZER_YOUTUBE_DIR`          | `${base}/youtube-dl`     | YouTube download directory.                                               |
 | `DEEZER_YOUTUBE_PLAYLIST_MAX` | `500`                    | Maximum number of songs taken from one YouTube playlist (1–10000).        |
 | `DEEZER_MPD_ENABLED`          | `false`                  | Enable MPD integration.                                                   |

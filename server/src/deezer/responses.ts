@@ -36,13 +36,6 @@ export interface PlaylistResponse {
   };
 }
 
-export interface FavoritesResponse {
-  data?: Array<{ id: number }>;
-  total?: number;
-  next?: string;
-  error?: DeezerApiError | string;
-}
-
 export interface SearchResponse {
   data?: unknown[];
   tracks?: { data?: unknown[] };

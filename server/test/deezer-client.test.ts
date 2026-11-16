@@ -244,7 +244,7 @@ describe('DeezerClient page parsing', () => {
   });
 });
 
-describe('DeezerClient playlist and favorites', () => {
+describe('DeezerClient playlist', () => {
   it('loads a playlist through the website API', async () => {
     nock('https://www.deezer.com')
       .post('/ajax/gw-light.php')
@@ -282,23 +282,6 @@ describe('DeezerClient playlist and favorites', () => {
 
     expect(playlist.name).toBe('Playlist');
     expect(playlist.songs).toHaveLength(1);
-  });
-
-  it('paginates favorites', async () => {
-    nock('https://api.deezer.com')
-      .get('/user/123/tracks')
-      .query({ limit: '10000000000' })
-      .reply(200, {
-        data: [{ id: 1 }, { id: 2 }],
-        total: 3,
-        next: 'https://api.deezer.com/user/123/tracks?limit=10000000000&index=2',
-      })
-      .get('/user/123/tracks')
-      .query({ limit: '10000000000', index: '2' })
-      .reply(200, { data: [{ id: 3 }], total: 3 });
-
-    const ids = await makeClient().getDeezerFavorites('123');
-    expect(ids).toEqual(['1', '2', '3']);
   });
 
   it('resolves a song URL from the media API', async () => {

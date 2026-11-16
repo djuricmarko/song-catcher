@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatClockTime, formatDuration, formatFileSize, formatIndex, pluralize } from '../../src/lib/format';
+import { formatClockTime, formatDate, formatFileSize, formatIndex, pluralize } from '../../src/lib/format';
 
 describe('pluralize', () => {
   it('adds an "s" unless there is exactly one', () => {
@@ -48,20 +48,13 @@ describe('formatClockTime', () => {
   });
 });
 
-describe('formatDuration', () => {
-  it('uses seconds below a minute', () => {
-    expect(formatDuration(0)).toBe('0s');
-    expect(formatDuration(1499)).toBe('1s');
-    expect(formatDuration(59_000)).toBe('59s');
+describe('formatDate', () => {
+  it('formats an ISO day without shifting it across time zones', () => {
+    expect(formatDate('2009-10-03')).toBe('Oct 3, 2009');
   });
 
-  it('uses minutes and padded seconds from a minute on', () => {
-    expect(formatDuration(60_000)).toBe('1m 00s');
-    expect(formatDuration(187_000)).toBe('3m 07s');
-  });
-
-  it('never goes negative', () => {
-    expect(formatDuration(-5000)).toBe('0s');
+  it('formats a timestamp', () => {
+    expect(formatDate(new Date(2026, 10, 16, 23, 59).getTime())).toBe('Nov 16, 2026');
   });
 });
 

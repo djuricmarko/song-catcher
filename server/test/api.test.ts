@@ -49,7 +49,6 @@ function createFakeDeezer(): DeezerClient {
       },
     ],
     parseDeezerPlaylist: async () => ({ name: 'Playlist', songs: [song] }),
-    getDeezerFavorites: async () => ['123'],
     getSongInfosFromWebsite: async () => song,
     downloadSong: async () => ({ format: 'MP3_128', extension: 'mp3' }),
     downloadPicture: async () => Buffer.from('cover'),
@@ -72,12 +71,11 @@ beforeEach(async () => {
   );
 
   scheduler = new Scheduler<DownloadTasks>(1, 10, logger);
-  scheduler.register('download_deezer_song_and_queue', async () => []);
-  scheduler.register('download_deezer_album_and_queue_and_zip', async () => []);
-  scheduler.register('download_deezer_playlist_and_queue_and_zip', async () => []);
-  scheduler.register('download_deezer_favorites', async () => []);
-  scheduler.register('download_youtubedl_and_queue', async () => []);
-  scheduler.register('download_youtube_playlist_and_queue_and_zip', async () => []);
+  scheduler.register('download_deezer_song', async () => []);
+  scheduler.register('download_deezer_album', async () => []);
+  scheduler.register('download_deezer_playlist', async () => []);
+  scheduler.register('download_youtube', async () => []);
+  scheduler.register('download_youtube_playlist', async () => []);
   scheduler.start();
 
   app = await createServer(config, logger, {
@@ -174,20 +172,6 @@ describe('downloads static files', () => {
     expect(literal.body).toBe('literal');
   });
 
-  it('serves zip files with non-ASCII names as attachments', async () => {
-    await mkdir(path.join(baseDirectory, 'zips'), { recursive: true });
-    await writeFile(path.join(baseDirectory, 'zips', 'Ōkami - 大神.zip'), 'zip');
-
-    const response = await app.inject({
-      method: 'GET',
-      url: `/downloads/zips/${encodeURIComponent('Ōkami - 大神.zip')}`,
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-disposition']).toBe(
-      `attachment; filename="_kami - __.zip"; filename*=UTF-8''${encodeURIComponent('Ōkami - 大神.zip')}`,
-    );
-  });
-
   it('still blocks encoded path traversal', async () => {
     const response = await app.inject({ method: 'GET', url: '/downloads/..%2F..%2Fetc%2Fpasswd' });
     expect(response.statusCode).not.toBe(200);
@@ -225,11 +209,21 @@ describe('download endpoints', () => {
         type: 'track',
         music_id: 123,
         add_to_playlist: false,
-        create_zip: false,
+        title: 'Artist - Song',
+        subtitle: 'Album',
       },
     });
     expect(response.statusCode).toBe(202);
     expect(response.json().task_id).toBeGreaterThan(0);
+
+    const queue = await app.inject({ method: 'GET', url: '/api/queue' });
+    expect(queue.json().at(-1)).toMatchObject({
+      source: 'deezer',
+      kind: 'track',
+      title: 'Artist - Song',
+      subtitle: 'Album',
+      args: { track_id: '123', add_to_playlist: false },
+    });
   });
 
   it('enqueues an album download', async () => {
@@ -240,17 +234,28 @@ describe('download endpoints', () => {
         type: 'album',
         music_id: '123',
         add_to_playlist: true,
-        create_zip: true,
       },
     });
     expect(response.statusCode).toBe(202);
+
+    const queue = await app.inject({ method: 'GET', url: '/api/queue' });
+    expect(queue.json().at(-1)).toMatchObject({ source: 'deezer', kind: 'album', title: 'Album 123', subtitle: null });
+  });
+
+  it('rejects options that no longer exist', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/download',
+      payload: { type: 'album', music_id: 123, add_to_playlist: false, create_zip: true },
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('rejects a missing boolean', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/download',
-      payload: { type: 'track', music_id: 123, add_to_playlist: false },
+      payload: { type: 'track', music_id: 123 },
     });
     expect(response.statusCode).toBe(400);
   });
@@ -280,7 +285,6 @@ describe('download endpoints', () => {
       payload: {
         url: 'https://www.youtube.com/playlist?list=PL123',
         add_to_playlist: false,
-        create_zip: true,
       },
     });
     expect(response.statusCode).toBe(202);
@@ -288,11 +292,12 @@ describe('download endpoints', () => {
     const queue = await app.inject({ method: 'GET', url: '/api/queue' });
     expect(queue.json().at(-1)).toMatchObject({
       id: response.json().task_id,
-      description: 'Downloading YouTube playlist',
+      source: 'youtube',
+      kind: 'playlist',
+      title: 'https://www.youtube.com/playlist?list=PL123',
       args: {
         playlist_url: 'https://www.youtube.com/playlist?list=PL123',
         add_to_playlist: false,
-        create_zip: true,
       },
     });
   });
@@ -301,16 +306,16 @@ describe('download endpoints', () => {
     const nonHttp = await app.inject({
       method: 'POST',
       url: '/api/playlist/youtube',
-      payload: { url: 'ftp://example.com/list', add_to_playlist: false, create_zip: false },
+      payload: { url: 'ftp://example.com/list', add_to_playlist: false },
     });
     expect(nonHttp.statusCode).toBe(400);
 
-    const missingZip = await app.inject({
+    const missingOption = await app.inject({
       method: 'POST',
       url: '/api/playlist/youtube',
-      payload: { url: 'https://www.youtube.com/playlist?list=PL123', add_to_playlist: false },
+      payload: { url: 'https://www.youtube.com/playlist?list=PL123' },
     });
-    expect(missingZip.statusCode).toBe(400);
+    expect(missingOption.statusCode).toBe(400);
   });
 
   it('enqueues a playlist download', async () => {
@@ -320,7 +325,6 @@ describe('download endpoints', () => {
       payload: {
         playlist_url: 'https://www.deezer.com/us/playlist/1',
         add_to_playlist: false,
-        create_zip: false,
       },
     });
     expect(response.statusCode).toBe(202);
@@ -330,25 +334,7 @@ describe('download endpoints', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/playlist/deezer',
-      payload: { playlist_url: ' ', add_to_playlist: false, create_zip: false },
-    });
-    expect(response.statusCode).toBe(400);
-  });
-
-  it('enqueues a favorites download', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/favorites/deezer',
-      payload: { user_id: '123', add_to_playlist: false, create_zip: false },
-    });
-    expect(response.statusCode).toBe(202);
-  });
-
-  it('rejects a non-numeric user id', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/favorites/deezer',
-      payload: { user_id: 'abc', add_to_playlist: false, create_zip: false },
+      payload: { playlist_url: ' ', add_to_playlist: false },
     });
     expect(response.statusCode).toBe(400);
   });
@@ -402,12 +388,13 @@ describe('queue event stream', () => {
     };
 
     await readUntil('event: snapshot');
-    scheduler.enqueue('Downloading track', 'download_deezer_song_and_queue', {
-      track_id: '1',
-      add_to_playlist: false,
-    });
+    scheduler.enqueue(
+      'download_deezer_song',
+      { track_id: '1', add_to_playlist: false },
+      { source: 'deezer', kind: 'track', title: 'Streamed track' },
+    );
     await readUntil('event: task');
-    expect(received).toContain('"description":"Downloading track"');
+    expect(received).toContain('"title":"Streamed track"');
 
     const started = Date.now();
     await app.close();
@@ -435,7 +422,7 @@ describe('URL prefix', () => {
       { cwd: baseDirectory },
     );
     const prefixedScheduler = new Scheduler<DownloadTasks>(1, 10, logger);
-    prefixedScheduler.register('download_deezer_song_and_queue', async () => []);
+    prefixedScheduler.register('download_deezer_song', async () => []);
     prefixedScheduler.start();
 
     const prefixedApp = await createServer(prefixedConfig, logger, {

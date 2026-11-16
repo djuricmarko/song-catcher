@@ -5,24 +5,20 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0 0.75rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background-color: var(--surface);
-  box-shadow: var(--shadow-card);
   transition:
     border-color var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease);
 }
 
-@media (hover: hover) {
-  .field:hover {
-    border-color: color-mix(in oklab, var(--ink) 25%, var(--line-strong));
-  }
+.field:hover {
+  border-color: var(--line-strong);
 }
 
 .field:focus-within {
-  border-color: color-mix(in oklab, var(--signal) 70%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--signal) 18%, transparent);
+  border-color: var(--ink-faint);
 }
 
 .md {
@@ -32,7 +28,7 @@
 
 .lg {
   height: 2.5rem;
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 
 .input {
@@ -47,7 +43,7 @@
 }
 
 .input::placeholder {
-  color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 
 .leading,
@@ -56,20 +52,4 @@
   flex-shrink: 0;
   align-items: center;
   color: var(--ink-muted);
-}
-
-@media (pointer: coarse) {
-  .md {
-    height: 2.75rem;
-  }
-
-  .lg {
-    height: 3rem;
-  }
-
-  /* Below 16px iOS Safari zooms the page when the field gets focus. */
-  .md,
-  .lg {
-    font-size: max(1rem, 16px);
-  }
 }
