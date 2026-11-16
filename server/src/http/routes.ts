@@ -9,7 +9,6 @@ import { registerQueueEvents } from './queue-events.js';
 import {
   deezerPlaylistSchema,
   downloadSchema,
-  favoritesSchema,
   filesQuerySchema,
   parseRequest,
   searchSchema,
@@ -34,56 +33,49 @@ export function registerApiRoutes(app: ApiFastifyInstance, config: AppConfig, se
 
   app.post(`${api}/download`, async (request, reply) => {
     const body = parseRequest(downloadSchema, request.body);
+    const musicId = String(body.music_id);
     const task =
       body.type === 'track'
-        ? scheduler.enqueue('Downloading track', 'download_deezer_song_and_queue', {
-            track_id: String(body.music_id),
-            add_to_playlist: body.add_to_playlist,
-          })
-        : scheduler.enqueue('Downloading album', 'download_deezer_album_and_queue_and_zip', {
-            album_id: String(body.music_id),
-            add_to_playlist: body.add_to_playlist,
-            create_zip: body.create_zip,
-          });
+        ? scheduler.enqueue(
+            'download_deezer_song',
+            { track_id: musicId, add_to_playlist: body.add_to_playlist },
+            { source: 'deezer', kind: 'track', title: body.title ?? `Track ${musicId}`, subtitle: body.subtitle },
+          )
+        : scheduler.enqueue(
+            'download_deezer_album',
+            { album_id: musicId, add_to_playlist: body.add_to_playlist },
+            { source: 'deezer', kind: 'album', title: body.title ?? `Album ${musicId}`, subtitle: body.subtitle },
+          );
     return accepted(reply, task);
   });
 
   app.post(`${api}/youtubedl`, async (request, reply) => {
     const body = parseRequest(youtubeSchema, request.body);
-    const task = scheduler.enqueue('Downloading via yt-dlp', 'download_youtubedl_and_queue', {
-      video_url: body.url,
-      add_to_playlist: body.add_to_playlist,
-    });
+    const task = scheduler.enqueue(
+      'download_youtube',
+      { video_url: body.url, add_to_playlist: body.add_to_playlist },
+      { source: 'youtube', kind: 'track', title: body.url },
+    );
     return accepted(reply, task);
   });
 
   app.post(`${api}/playlist/deezer`, async (request, reply) => {
     const body = parseRequest(deezerPlaylistSchema, request.body);
-    const task = scheduler.enqueue('Downloading Deezer playlist', 'download_deezer_playlist_and_queue_and_zip', {
-      playlist_id: body.playlist_url,
-      add_to_playlist: body.add_to_playlist,
-      create_zip: body.create_zip,
-    });
+    const task = scheduler.enqueue(
+      'download_deezer_playlist',
+      { playlist_id: body.playlist_url, add_to_playlist: body.add_to_playlist },
+      { source: 'deezer', kind: 'playlist', title: body.playlist_url },
+    );
     return accepted(reply, task);
   });
 
   app.post(`${api}/playlist/youtube`, async (request, reply) => {
     const body = parseRequest(youtubePlaylistSchema, request.body);
-    const task = scheduler.enqueue('Downloading YouTube playlist', 'download_youtube_playlist_and_queue_and_zip', {
-      playlist_url: body.url,
-      add_to_playlist: body.add_to_playlist,
-      create_zip: body.create_zip,
-    });
-    return accepted(reply, task);
-  });
-
-  app.post(`${api}/favorites/deezer`, async (request, reply) => {
-    const body = parseRequest(favoritesSchema, request.body);
-    const task = scheduler.enqueue('Downloading Deezer favorites', 'download_deezer_favorites', {
-      user_id: body.user_id,
-      add_to_playlist: body.add_to_playlist,
-      create_zip: body.create_zip,
-    });
+    const task = scheduler.enqueue(
+      'download_youtube_playlist',
+      { playlist_url: body.url, add_to_playlist: body.add_to_playlist },
+      { source: 'youtube', kind: 'playlist', title: body.url },
+    );
     return accepted(reply, task);
   });
 

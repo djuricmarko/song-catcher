@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import pino from 'pino';
 
 import { describe, expect, it } from 'vitest';
@@ -5,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { Scheduler } from '../src/queue/scheduler.js';
 
 const logger = pino({ level: 'silent' });
+const label = { source: 'deezer', kind: 'track', title: 'Task' } as const;
 
 async function waitForTask(scheduler: Scheduler, taskId: number) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -23,7 +28,7 @@ describe('Scheduler', () => {
     scheduler.register('echo', async (args) => [String(args.value)]);
     scheduler.start();
 
-    const task = scheduler.enqueue('echo task', 'echo', { value: 'hello' });
+    const task = scheduler.enqueue('echo', { value: 'hello' }, label);
     expect(task.state).toBe('waiting');
 
     const finished = await waitForTask(scheduler, task.id);
@@ -48,7 +53,7 @@ describe('Scheduler', () => {
     // Let every worker park itself waiting for work.
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    const tasks = [1, 2, 3].map((value) => scheduler.enqueue('record', 'record', { value }));
+    const tasks = [1, 2, 3].map((value) => scheduler.enqueue('record', { value }, label));
     await Promise.all(tasks.map((task) => waitForTask(scheduler, task.id)));
 
     expect(runs.sort()).toEqual([1, 2, 3]);
@@ -61,13 +66,13 @@ describe('Scheduler', () => {
     const scheduler = new Scheduler(1, 10, logger);
     scheduler.register('hang', () => new Promise<string[]>(() => undefined));
     scheduler.start();
-    scheduler.enqueue('hang', 'hang', {});
+    scheduler.enqueue('hang', {}, label);
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     const started = Date.now();
     await scheduler.stop(50);
     expect(Date.now() - started).toBeLessThan(500);
-    expect(() => scheduler.enqueue('hang', 'hang', {})).toThrowError(/stopping/);
+    expect(() => scheduler.enqueue('hang', {}, label)).toThrowError(/stopping/);
   });
 
   it('keeps warnings on a successful task', async () => {
@@ -78,7 +83,7 @@ describe('Scheduler', () => {
     });
     scheduler.start();
 
-    const task = scheduler.enqueue('partial', 'partial', {});
+    const task = scheduler.enqueue('partial', {}, label);
     expect(task.warnings).toEqual([]);
     const finished = await waitForTask(scheduler, task.id);
     expect(finished.state).toBe('mission accomplished');
@@ -99,13 +104,45 @@ describe('Scheduler', () => {
     );
     scheduler.start();
 
-    const tasks = Array.from({ length: 12 }, () => scheduler.enqueue('noop', 'noop', {}));
+    const tasks = Array.from({ length: 12 }, () => scheduler.enqueue('noop', {}, label));
     await waitForTask(scheduler, tasks.at(-1)!.id);
 
     expect(removed).toEqual([1, 2]);
     expect(scheduler.getTasks().map((task) => task.id)).toEqual(tasks.slice(2).map((t) => t.id));
 
     await scheduler.stop();
+  });
+
+  it('labels a task and lets the handler refine the label', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'scheduler-test-'));
+    const file = path.join(directory, 'song.mp3');
+    const scheduler = new Scheduler(1, 10, logger);
+    scheduler.register('labelled', async (_args, context) => {
+      context.reportMedia({ title: 'Pantera - Walk', date: '2009-10-03' });
+      await writeFile(file, 'audio');
+      return [file, path.join(directory, 'missing.mp3')];
+    });
+    scheduler.start();
+
+    const task = scheduler.enqueue(
+      'labelled',
+      {},
+      { source: 'youtube', kind: 'track', title: 'https://example.com/video' },
+    );
+    expect(task).toMatchObject({
+      source: 'youtube',
+      kind: 'track',
+      title: 'https://example.com/video',
+      subtitle: null,
+      date: null,
+      sizeBytes: 0,
+    });
+
+    const finished = await waitForTask(scheduler, task.id);
+    expect(finished).toMatchObject({ title: 'Pantera - Walk', subtitle: null, date: '2009-10-03', sizeBytes: 5 });
+
+    await scheduler.stop();
+    await rm(directory, { recursive: true, force: true });
   });
 
   it('reports progress', async () => {
@@ -124,7 +161,7 @@ describe('Scheduler', () => {
     });
     scheduler.start();
 
-    const task = scheduler.enqueue('progress task', 'progress', {});
+    const task = scheduler.enqueue('progress', {}, label);
     const finished = await waitForTask(scheduler, task.id);
 
     expect(finished.progress).toEqual([3, 3]);
@@ -140,7 +177,7 @@ describe('Scheduler', () => {
     });
     scheduler.start();
 
-    const task = scheduler.enqueue('failing task', 'fail', {});
+    const task = scheduler.enqueue('fail', {}, label);
     const finished = await waitForTask(scheduler, task.id);
 
     expect(finished.state).toBe('failed');
@@ -154,7 +191,7 @@ describe('Scheduler', () => {
     scheduler.register('quick', async () => []);
     scheduler.start();
 
-    const tasks = [1, 2, 3, 4].map((value) => scheduler.enqueue(`task ${value}`, 'quick', {}));
+    const tasks = [1, 2, 3, 4].map(() => scheduler.enqueue('quick', {}, label));
     await waitForTask(scheduler, tasks[3]?.id ?? 0);
 
     expect(scheduler.getTasks().length).toBeLessThanOrEqual(2);
@@ -163,11 +200,11 @@ describe('Scheduler', () => {
 
   it('rejects unknown handlers and enqueues after stopping', async () => {
     const scheduler = new Scheduler(1, 10, logger);
-    expect(() => scheduler.enqueue('unknown', 'missing', {})).toThrowError(/Unknown task handler/);
+    expect(() => scheduler.enqueue('missing', {}, label)).toThrowError(/Unknown task handler/);
 
     scheduler.start();
     await scheduler.stop();
-    expect(() => scheduler.enqueue('after stop', 'missing', {})).toThrowError(/stopping/);
+    expect(() => scheduler.enqueue('missing', {}, label)).toThrowError(/stopping/);
   });
 
   it('runs tasks concurrently with multiple workers', async () => {
@@ -183,8 +220,8 @@ describe('Scheduler', () => {
     });
     scheduler.start();
 
-    const first = scheduler.enqueue('first', 'slow', {});
-    const second = scheduler.enqueue('second', 'slow', {});
+    const first = scheduler.enqueue('slow', {}, label);
+    const second = scheduler.enqueue('slow', {}, label);
     await Promise.all([waitForTask(scheduler, first.id), waitForTask(scheduler, second.id)]);
 
     expect(maximumActive).toBe(2);
@@ -201,9 +238,9 @@ describe('Scheduler typing', () => {
     // These lines only need to fail type-checking (`npm run typecheck`).
     const typeChecks = () => {
       // @ts-expect-error unknown handler name
-      scheduler.enqueue('x', 'gret', { name: 'a' });
+      scheduler.enqueue('gret', { name: 'a' }, label);
       // @ts-expect-error wrong argument type
-      scheduler.enqueue('x', 'greet', { name: 1 });
+      scheduler.enqueue('greet', { name: 1 }, label);
     };
     expect(typeChecks).toBeTypeOf('function');
   });

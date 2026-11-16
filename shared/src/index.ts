@@ -24,7 +24,8 @@ export interface DownloadRequest {
   type: 'track' | 'album';
   music_id: number;
   add_to_playlist: boolean;
-  create_zip: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 export interface YoutubeDownloadRequest {
@@ -35,26 +36,30 @@ export interface YoutubeDownloadRequest {
 export interface YoutubePlaylistDownloadRequest {
   url: string;
   add_to_playlist: boolean;
-  create_zip: boolean;
 }
 
 export interface DeezerPlaylistDownloadRequest {
   playlist_url: string;
   add_to_playlist: boolean;
-  create_zip: boolean;
-}
-
-export interface FavoritesDownloadRequest {
-  user_id: string;
-  add_to_playlist: boolean;
-  create_zip: boolean;
 }
 
 export type TaskState = 'waiting' | 'active' | 'mission accomplished' | 'failed';
 
-export interface QueueTask {
+export type TaskSource = 'deezer' | 'youtube';
+
+export type TaskKind = 'track' | 'album' | 'playlist';
+
+export interface TaskMedia {
+  title: string;
+  subtitle: string | null;
+  date: string | null;
+}
+
+export interface QueueTask extends TaskMedia {
   id: number;
-  description: string;
+  source: TaskSource;
+  kind: TaskKind;
+  sizeBytes: number;
   args: Record<string, unknown>;
   state: TaskState;
   result: string[] | null;

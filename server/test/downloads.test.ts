@@ -1,7 +1,8 @@
-import { chmod, mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { TaskMedia } from '@song-catcher/shared';
 import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,8 +13,10 @@ import { DownloadError, DownloadService, type DeezerService } from '../src/downl
 import {
   downloadWithYtDlp,
   listYtDlpPlaylist,
+  parseYtDlpInfo,
   parseYtDlpOutput,
   parseYtDlpPlaylist,
+  type YoutubeVideoInfo,
 } from '../src/downloads/youtube.js';
 
 const ARL = 'a'.repeat(192);
@@ -62,7 +65,6 @@ function makeService(overrides: Partial<DeezerService> = {}) {
   const service: DeezerService = {
     deezerSearch: async () => [],
     parseDeezerPlaylist: async () => ({ name: 'Playlist', songs: [] }),
-    getDeezerFavorites: async () => [],
     getSongInfosFromWebsite: async () => makeSong(),
     downloadSong,
     downloadPicture: async () => Buffer.from('cover'),
@@ -94,8 +96,12 @@ describe('DownloadService', () => {
     const { service } = makeService();
     const downloads = new DownloadService(config, service, logger);
 
-    const files = await downloads.downloadTrack('1', false);
+    const media: Array<Partial<TaskMedia>> = [];
+    const files = await downloads.downloadTrack('1', false, {
+      reportMedia: (reported) => media.push(reported),
+    });
 
+    expect(media).toEqual([{ title: 'Artist - Song', subtitle: 'Album' }]);
     expect(files).toHaveLength(1);
     expect(files[0]).toBe(path.join(baseDirectory, 'songs', 'Artist - Song.mp3'));
     expect(await readFile(files[0]!, 'utf8')).toBe('audio');
@@ -125,10 +131,13 @@ describe('DownloadService', () => {
     const downloads = new DownloadService(config, service, logger);
 
     const progress: Array<[number, number]> = [];
-    const files = await downloads.downloadAlbum('10', false, false, (current, maximum) => {
-      progress.push([current, maximum]);
+    const media: Array<Partial<TaskMedia>> = [];
+    const files = await downloads.downloadAlbum('10', false, {
+      reportProgress: (current, maximum) => progress.push([current, maximum]),
+      reportMedia: (reported) => media.push(reported),
     });
 
+    expect(media).toEqual([{ title: 'Album', subtitle: 'Album Artist' }]);
     expect(files).toEqual([
       path.join(baseDirectory, 'albums', 'Album Artist - Album', '01 - Artist First.mp3'),
       path.join(baseDirectory, 'albums', 'Album Artist - Album', '02 - Artist Second.mp3'),
@@ -153,8 +162,8 @@ describe('DownloadService', () => {
     const downloads = new DownloadService(config, service, logger);
     const warnings: string[] = [];
 
-    const files = await downloads.downloadAlbum('1', false, false, undefined, (message) => {
-      warnings.push(message);
+    const files = await downloads.downloadAlbum('1', false, {
+      reportWarning: (message) => warnings.push(message),
     });
 
     expect(files).toHaveLength(1);
@@ -168,57 +177,25 @@ describe('DownloadService', () => {
     } as unknown as Partial<DeezerService>);
     const downloads = new DownloadService(config, service, logger);
 
-    const files = await downloads.downloadPlaylist('playlist-url', false, false);
+    const media: Array<Partial<TaskMedia>> = [];
+    const files = await downloads.downloadPlaylist('playlist-url', false, {
+      reportMedia: (reported) => media.push(reported),
+    });
     const m3u8 = files.at(-1)!;
 
+    expect(media).toEqual([{ title: 'My Playlist', subtitle: '2 songs' }]);
     expect(m3u8).toBe(path.join(baseDirectory, 'playlists', 'My Playlist', '00 My Playlist.m3u8'));
     expect(await readFile(m3u8, 'utf8')).toBe('Artist - First.mp3\nArtist - Second.mp3\n');
   });
 
-  it('creates a zip archive when requested', async () => {
-    const songs = [makeSong({ SNG_ID: '1', SNG_TITLE: 'First' })];
-    const { service } = makeService({
-      parseDeezerPlaylist: async () => ({ name: 'My Playlist', songs }),
-    } as unknown as Partial<DeezerService>);
-    const downloads = new DownloadService(config, service, logger);
-
-    const files = await downloads.downloadPlaylist('playlist-url', false, true);
-    expect(files).toHaveLength(1);
-    expect(files[0]).toBe(path.join(baseDirectory, 'zips', 'My Playlist.zip'));
-    expect((await stat(files[0]!)).size).toBeGreaterThan(0);
-
-    const zip = await readFile(files[0]!);
-    expect(zip.subarray(0, 4)).toEqual(Buffer.from('PK\x03\x04', 'latin1'));
-    // Compression method 0 = stored; audio is not worth deflating.
-    expect(zip.readUInt16LE(8)).toBe(0);
-    // The temporary .part file was renamed, not left behind.
-    expect(await readdir(path.join(baseDirectory, 'zips'))).toEqual(['My Playlist.zip']);
-  });
-
-  it('downloads favorites into a favorites playlist', async () => {
-    const { service } = makeService({
-      getDeezerFavorites: async () => ['1', '2'],
-      getSongInfosFromWebsite: async (_type: unknown, id: string | number) =>
-        makeSong({ SNG_ID: String(id), SNG_TITLE: `Song ${id}` }),
-    } as unknown as Partial<DeezerService>);
-    const downloads = new DownloadService(config, service, logger);
-
-    const files = await downloads.downloadFavorites('123', false, false);
-
-    expect(files).toHaveLength(3);
-    expect(files[0]).toBe(path.join(baseDirectory, 'playlists', 'favorites_123', 'Artist - Song 1.mp3'));
-    expect(files.at(-1)).toBe(path.join(baseDirectory, 'playlists', 'favorites_123', '00 favorites_123.m3u8'));
-  });
-
-  it('fails clearly instead of creating empty playlists and zips', async () => {
+  it('fails clearly instead of creating empty playlists', async () => {
     const { service } = makeService({
       parseDeezerPlaylist: async () => ({ name: 'Empty', songs: [] }),
     } as unknown as Partial<DeezerService>);
     const downloads = new DownloadService(config, service, logger);
 
-    await expect(downloads.downloadPlaylist('playlist-url', false, false)).rejects.toBeInstanceOf(DownloadError);
+    await expect(downloads.downloadPlaylist('playlist-url', false)).rejects.toBeInstanceOf(DownloadError);
     await expect(downloads.createM3u8File([])).rejects.toThrowError(/without songs/);
-    await expect(downloads.createZipFile([])).rejects.toThrowError(/without songs/);
   });
 });
 
@@ -226,6 +203,20 @@ describe('yt-dlp wrapper', () => {
   it('parses the printed output path', () => {
     expect(parseYtDlpOutput('some log\n/tmp/video.mp3\n')).toBe('/tmp/video.mp3');
     expect(parseYtDlpOutput('[ExtractAudio] Destination: /tmp/video.mp3\n')).toBe('/tmp/video.mp3');
+  });
+
+  it('reads the video title and upload date from the info line', () => {
+    expect(parseYtDlpInfo('{"title": "Pantera - Walk", "upload_date": "20091003"}')).toEqual({
+      title: 'Pantera - Walk',
+      uploadDate: '2009-10-03',
+    });
+    expect(parseYtDlpInfo('{"title": "Live set", "upload_date": null}')).toEqual({
+      title: 'Live set',
+      uploadDate: undefined,
+    });
+    expect(parseYtDlpInfo('/tmp/video.mp3')).toBeUndefined();
+    expect(parseYtDlpInfo('{broken')).toBeUndefined();
+    expect(parseYtDlpInfo('{"upload_date": "20091003"}')).toBeUndefined();
   });
 
   it('downloads through an executable', async () => {
@@ -241,6 +232,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 out=$(printf '%s' "$out" | sed 's/%(title)s.%(ext)s/video.mp3/')
+printf '%s\\n' '{"title": "Video", "upload_date": "20240930"}'
 printf 'audio' > "$out"
 printf '%s\\n' "$out"
 `,
@@ -250,12 +242,15 @@ printf '%s\\n' "$out"
     const directory = path.join(baseDirectory, 'youtube');
     await mkdir(directory, { recursive: true });
 
+    const infos: YoutubeVideoInfo[] = [];
     const filename = await downloadWithYtDlp({
       url: 'https://example.com/video',
       destinationDirectory: directory,
       executable: scriptPath,
+      onInfo: (info) => infos.push(info),
     });
 
+    expect(infos).toEqual([{ title: 'Video', uploadDate: '2024-09-30' }]);
     expect(filename).toBe(path.join(directory, 'video.mp3'));
     expect(await readFile(filename, 'utf8')).toBe('audio');
   });
@@ -522,14 +517,15 @@ printf '%s\\n' "$directory/$name.mp3"
     const progress: Array<[number, number]> = [];
     const warnings: string[] = [];
 
-    const files = await makeDownloads().downloadYoutubePlaylist(
-      'https://example.com/list',
-      false,
-      false,
-      (current, maximum) => progress.push([current, maximum]),
-      (message) => warnings.push(message),
-    );
+    const media: Array<Partial<TaskMedia>> = [];
 
+    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false, {
+      reportProgress: (current, maximum) => progress.push([current, maximum]),
+      reportWarning: (message) => warnings.push(message),
+      reportMedia: (reported) => media.push(reported),
+    });
+
+    expect(media).toEqual([{ title: 'Road: Trip', subtitle: '2 songs' }]);
     const directory = path.join(baseDirectory, 'youtube-dl', 'Road Trip');
     expect(files).toEqual([
       path.join(directory, 'one.mp3'),
@@ -552,13 +548,13 @@ printf '%s\\n' "$directory/$name.mp3"
   it('skips songs that were already downloaded', async () => {
     await setPlaylist('Again', ['one', 'two']);
     const downloads = makeDownloads();
-    await downloads.downloadYoutubePlaylist('https://example.com/list', false, false);
+    await downloads.downloadYoutubePlaylist('https://example.com/list', false);
     expect(await downloadCalls()).toHaveLength(2);
 
     const directory = path.join(baseDirectory, 'youtube-dl', 'Again');
     await rm(path.join(directory, 'two.mp3'));
     await setPlaylist('Again', ['one', 'two', 'three']);
-    const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false, false);
+    const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false);
 
     // "one" is still on disk; "two" was deleted and "three" is new.
     expect(await downloadCalls()).toEqual([
@@ -578,7 +574,7 @@ printf '%s\\n' "$directory/$name.mp3"
     const downloads = makeDownloads();
 
     await writeFile(path.join(directory, YOUTUBE_PLAYLIST_MANIFEST), 'not json');
-    await downloads.downloadYoutubePlaylist('https://example.com/list', false, false);
+    await downloads.downloadYoutubePlaylist('https://example.com/list', false);
     expect(await downloadCalls()).toHaveLength(2);
 
     await rm(path.join(directory, 'one.mp3'));
@@ -586,7 +582,7 @@ printf '%s\\n' "$directory/$name.mp3"
       path.join(directory, YOUTUBE_PLAYLIST_MANIFEST),
       JSON.stringify({ 'id-one': '../../outside.mp3', 'id-two': 7 }),
     );
-    const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false, false);
+    const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false);
 
     expect(await downloadCalls()).toHaveLength(4);
     expect(files).not.toContain(path.join(baseDirectory, 'outside.mp3'));
@@ -596,13 +592,9 @@ printf '%s\\n' "$directory/$name.mp3"
     await setPlaylist('Partly', ['one', 'broken', 'two']);
     const warnings: string[] = [];
 
-    const files = await makeDownloads().downloadYoutubePlaylist(
-      'https://example.com/list',
-      false,
-      false,
-      undefined,
-      (message) => warnings.push(message),
-    );
+    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false, {
+      reportWarning: (message) => warnings.push(message),
+    });
 
     expect(files.map((file) => path.basename(file))).toEqual(['one.mp3', 'two.mp3', '00 Partly.m3u8']);
     expect(warnings).toHaveLength(1);
@@ -613,32 +605,19 @@ printf '%s\\n' "$directory/$name.mp3"
     await setPlaylist('Endless', ['one', 'two', 'three', 'four', 'five']);
     const warnings: string[] = [];
 
-    const files = await makeDownloads().downloadYoutubePlaylist(
-      'https://example.com/list',
-      false,
-      false,
-      undefined,
-      (message) => warnings.push(message),
-    );
+    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false, {
+      reportWarning: (message) => warnings.push(message),
+    });
 
     expect(await downloadCalls()).toHaveLength(3);
     expect(files).toHaveLength(4);
     expect(warnings).toEqual(["Playlist 'Endless' has more than 3 songs; only the first 3 are downloaded"]);
   });
 
-  it('creates a zip with the songs and the m3u8', async () => {
-    await setPlaylist('Zipped', ['one', 'two']);
-
-    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false, true);
-
-    expect(files).toEqual([path.join(baseDirectory, 'zips', 'Zipped.zip')]);
-    expect((await stat(files[0] ?? '')).size).toBeGreaterThan(0);
-  });
-
   it('keeps a percent sign in the playlist name', async () => {
     await setPlaylist('100% hits', ['one']);
 
-    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false, false);
+    const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false);
 
     expect(files[0]).toBe(path.join(baseDirectory, 'youtube-dl', '100% hits', 'one.mp3'));
   });
@@ -647,12 +626,12 @@ printf '%s\\n' "$directory/$name.mp3"
     const downloads = makeDownloads();
 
     await setPlaylist('Empty', []);
-    await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false, false)).rejects.toThrowError(
+    await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false)).rejects.toThrowError(
       /Playlist 'Empty' has no songs/,
     );
 
     await setPlaylist('Dead', ['broken']);
-    await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false, false)).rejects.toBeInstanceOf(
+    await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false)).rejects.toBeInstanceOf(
       DownloadError,
     );
     await expect(readdir(path.join(baseDirectory, 'youtube-dl', 'Dead'))).resolves.toEqual([]);

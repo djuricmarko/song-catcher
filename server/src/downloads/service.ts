@@ -1,6 +1,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { TaskMedia } from '@song-catcher/shared';
 import type { Logger } from 'pino';
 
 import type { AppConfig } from '../config/env.js';
@@ -8,19 +9,21 @@ import type { DeezerClient } from '../deezer/client.js';
 import type { DeezerSong } from '../deezer/types.js';
 import { errorMessage } from '../lib/errors.js';
 import { isNonEmptyFile, removeQuietly, temporaryPathFor } from '../lib/files.js';
-import { writeZipArchive } from './archive.js';
 import { syncWithMpd } from './mpd-sync.js';
 import { buildSongFilename, cleanFilename, songDirectory, type SongPathType } from './paths.js';
 import { readPlaylistManifest, writePlaylistManifest, type PlaylistManifest } from './playlist-manifest.js';
-import { downloadWithYtDlp, listYtDlpPlaylist, type YoutubePlaylistEntry } from './youtube.js';
+import { downloadWithYtDlp, listYtDlpPlaylist, type YoutubePlaylistEntry, type YoutubeVideoInfo } from './youtube.js';
 
 export type DeezerService = Pick<
   DeezerClient,
-  'parseDeezerPlaylist' | 'getDeezerFavorites' | 'getSongInfosFromWebsite' | 'downloadSong' | 'fileExtension'
+  'parseDeezerPlaylist' | 'getSongInfosFromWebsite' | 'downloadSong' | 'fileExtension'
 >;
 
-export type ProgressReporter = (current: number, maximum: number) => void;
-export type WarningReporter = (message: string) => void;
+export interface DownloadReporters {
+  reportProgress?: (current: number, maximum: number) => void;
+  reportWarning?: (message: string) => void;
+  reportMedia?: (media: Partial<TaskMedia>) => void;
+}
 
 export class DownloadError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -34,14 +37,11 @@ interface Batch<Item> {
   download: (item: Item) => Promise<string>;
   describe: (item: Item) => string;
   logFailure: (item: Item, error: unknown) => void;
-  onProgress?: ProgressReporter;
-  onWarning?: WarningReporter;
+  reporters: DownloadReporters;
 }
 
-interface CollectionOptions {
-  addToPlaylist: boolean;
-  createZip: boolean;
-  withPlaylistFile: boolean;
+function songCount(count: number): string {
+  return count === 1 ? '1 song' : `${count} songs`;
 }
 
 function songLabel(song: DeezerSong): string {
@@ -58,12 +58,16 @@ export class DownloadService {
   public async downloadTrack(
     trackId: string,
     addToPlaylist: boolean,
-    onProgress?: ProgressReporter,
+    reporters: DownloadReporters = {},
   ): Promise<string[]> {
-    onProgress?.(0, 1);
+    reporters.reportProgress?.(0, 1);
     const song = await this.deezer.getSongInfosFromWebsite('track', trackId);
+    reporters.reportMedia?.({
+      title: [song.ART_NAME, song.SNG_TITLE].filter(Boolean).join(' - ') || `Track ${trackId}`,
+      subtitle: song.ALB_TITLE || null,
+    });
     const filename = await this.downloadSongToDisk('track', song);
-    onProgress?.(1, 1);
+    reporters.reportProgress?.(1, 1);
     await this.updateMpd([filename], addToPlaylist);
     return [filename];
   }
@@ -71,11 +75,16 @@ export class DownloadService {
   public async downloadAlbum(
     albumId: string,
     addToPlaylist: boolean,
-    createZip: boolean,
-    onProgress?: ProgressReporter,
-    onWarning?: WarningReporter,
+    reporters: DownloadReporters = {},
   ): Promise<string[]> {
     const songs = await this.deezer.getSongInfosFromWebsite('album', albumId);
+    const first = songs[0];
+    if (first) {
+      reporters.reportMedia?.({
+        title: first.ALB_TITLE || `Album ${albumId}`,
+        subtitle: first.ALB_ART_NAME || first.ART_NAME || null,
+      });
+    }
 
     const files = await this.downloadBatch({
       items: songs,
@@ -84,24 +93,23 @@ export class DownloadService {
       logFailure: (song, error) => {
         this.logger.warn({ err: error, albumId, songId: song.SNG_ID }, 'could not download album song; continuing');
       },
-      onProgress,
-      onWarning,
+      reporters,
     });
     if (files.length === 0) {
       throw new DownloadError(`No songs from album ${albumId} could be downloaded`);
     }
 
-    return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: false });
+    await this.updateMpd(files, addToPlaylist);
+    return files;
   }
 
   public async downloadPlaylist(
     playlistUrl: string,
     addToPlaylist: boolean,
-    createZip: boolean,
-    onProgress?: ProgressReporter,
-    onWarning?: WarningReporter,
+    reporters: DownloadReporters = {},
   ): Promise<string[]> {
     const playlist = await this.deezer.parseDeezerPlaylist(playlistUrl);
+    reporters.reportMedia?.({ title: playlist.name, subtitle: songCount(playlist.songs.length) });
     if (playlist.songs.length === 0) {
       throw new DownloadError(`Deezer playlist '${playlist.name}' has no songs`);
     }
@@ -116,47 +124,13 @@ export class DownloadService {
           'could not download playlist song; continuing',
         );
       },
-      onProgress,
-      onWarning,
+      reporters,
     });
     if (files.length === 0) {
       throw new DownloadError(`No songs from playlist '${playlist.name}' could be downloaded`);
     }
 
-    return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
-  }
-
-  public async downloadFavorites(
-    userId: string,
-    addToPlaylist: boolean,
-    createZip: boolean,
-    onProgress?: ProgressReporter,
-    onWarning?: WarningReporter,
-  ): Promise<string[]> {
-    const favoriteSongIds = await this.deezer.getDeezerFavorites(userId);
-    if (favoriteSongIds.length === 0) {
-      throw new DownloadError(`Deezer user ${userId} has no favorite songs`);
-    }
-
-    const playlistName = `favorites_${userId}`;
-    const files = await this.downloadBatch({
-      items: favoriteSongIds,
-      download: async (songId) => {
-        const song = await this.deezer.getSongInfosFromWebsite('track', songId);
-        return this.downloadSongToDisk('playlist', song, playlistName);
-      },
-      describe: (songId) => `song ${songId}`,
-      logFailure: (songId, error) => {
-        this.logger.warn({ err: error, userId, songId }, 'could not download favorite song; continuing');
-      },
-      onProgress,
-      onWarning,
-    });
-    if (files.length === 0) {
-      throw new DownloadError(`No favorite songs from user ${userId} could be downloaded`);
-    }
-
-    return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
+    return this.finishPlaylist(files, addToPlaylist);
   }
 
   public async downloadSongToDisk(searchType: SongPathType, song: DeezerSong, playlistName?: string): Promise<string> {
@@ -187,8 +161,14 @@ export class DownloadService {
     }
   }
 
-  public async downloadYoutube(url: string, addToPlaylist: boolean): Promise<string[]> {
-    const filename = await this.downloadWithYtDlp(url, this.config.downloads.youtubeDir);
+  public async downloadYoutube(
+    url: string,
+    addToPlaylist: boolean,
+    reporters: DownloadReporters = {},
+  ): Promise<string[]> {
+    const filename = await this.downloadWithYtDlp(url, this.config.downloads.youtubeDir, (info) => {
+      reporters.reportMedia?.({ title: info.title, date: info.uploadDate ?? null });
+    });
     await this.updateMpd([filename], addToPlaylist);
     return [filename];
   }
@@ -196,9 +176,7 @@ export class DownloadService {
   public async downloadYoutubePlaylist(
     url: string,
     addToPlaylist: boolean,
-    createZip: boolean,
-    onProgress?: ProgressReporter,
-    onWarning?: WarningReporter,
+    reporters: DownloadReporters = {},
   ): Promise<string[]> {
     const maxEntries = this.config.youtube.playlistMaxEntries;
     const playlist = await listYtDlpPlaylist({
@@ -207,11 +185,12 @@ export class DownloadService {
       proxyUrl: this.config.deezer.proxyUrl,
       maxEntries,
     });
+    reporters.reportMedia?.({ title: playlist.title, subtitle: songCount(playlist.entries.length) });
     if (playlist.entries.length === 0) {
       throw new DownloadError(`Playlist '${playlist.title}' has no songs`);
     }
     if (playlist.truncated) {
-      onWarning?.(
+      reporters.reportWarning?.(
         `Playlist '${playlist.title}' has more than ${maxEntries} songs; only the first ${maxEntries} are downloaded`,
       );
     }
@@ -230,15 +209,13 @@ export class DownloadService {
           'could not download playlist song; continuing',
         );
       },
-      onProgress,
-      onWarning,
+      reporters,
     });
     if (downloaded.length === 0) {
       throw new DownloadError(`No songs from playlist '${playlist.title}' could be downloaded`);
     }
 
-    const files = [...new Set(downloaded)];
-    return this.finishCollection(files, { addToPlaylist, createZip, withPlaylistFile: true });
+    return this.finishPlaylist([...new Set(downloaded)], addToPlaylist);
   }
 
   private async downloadPlaylistEntry(
@@ -265,10 +242,15 @@ export class DownloadService {
     return filename;
   }
 
-  private downloadWithYtDlp(url: string, destinationDirectory: string): Promise<string> {
+  private downloadWithYtDlp(
+    url: string,
+    destinationDirectory: string,
+    onInfo?: (info: YoutubeVideoInfo) => void,
+  ): Promise<string> {
     return downloadWithYtDlp({
       url,
       destinationDirectory,
+      onInfo,
       executable: this.config.tools.ytdlpPath,
       ffmpegPath: this.config.tools.ffmpegPath,
       proxyUrl: this.config.deezer.proxyUrl,
@@ -276,26 +258,25 @@ export class DownloadService {
   }
 
   private async downloadBatch<Item>(batch: Batch<Item>): Promise<string[]> {
-    const { items, onProgress, onWarning } = batch;
+    const { items, reporters } = batch;
     const files: string[] = [];
 
     for (const [index, item] of items.entries()) {
-      onProgress?.(index, items.length);
+      reporters.reportProgress?.(index, items.length);
       try {
         files.push(await batch.download(item));
       } catch (error) {
         batch.logFailure(item, error);
-        onWarning?.(`Could not download ${batch.describe(item)}: ${errorMessage(error)}`);
+        reporters.reportWarning?.(`Could not download ${batch.describe(item)}: ${errorMessage(error)}`);
       }
     }
-    onProgress?.(items.length, items.length);
+    reporters.reportProgress?.(items.length, items.length);
     return files;
   }
 
-  private async finishCollection(files: string[], options: CollectionOptions): Promise<string[]> {
-    await this.updateMpd(files, options.addToPlaylist);
-    const output = options.withPlaylistFile ? [...files, await this.createM3u8File(files)] : files;
-    return options.createZip ? [await this.createZipFile(output)] : output;
+  private async finishPlaylist(files: string[], addToPlaylist: boolean): Promise<string[]> {
+    await this.updateMpd(files, addToPlaylist);
+    return [...files, await this.createM3u8File(files)];
   }
 
   public async createM3u8File(files: string[]): Promise<string> {
@@ -316,33 +297,6 @@ export class DownloadService {
     await writeFile(m3u8Path, `${entries.join('\n')}\n`, 'utf8');
     this.logger.info({ file: m3u8Path }, 'created m3u8 playlist');
     return m3u8Path;
-  }
-
-  public async createZipFile(files: string[]): Promise<string> {
-    const first = files[0];
-    if (!first) {
-      throw new DownloadError('Cannot create a zip file without songs');
-    }
-
-    const folderName = path.basename(path.dirname(first));
-    const zipPath = path.join(this.config.downloads.zipsDir, `${folderName}.zip`);
-    await mkdir(this.config.downloads.zipsDir, { recursive: true });
-
-    const existingFiles = await this.existingFiles(files);
-    if (existingFiles.length === 0) {
-      throw new DownloadError('Cannot create a zip file; none of the songs exist');
-    }
-
-    try {
-      await writeZipArchive(zipPath, folderName, existingFiles);
-    } catch (error) {
-      throw new DownloadError(`Could not create zip file ${zipPath}: ${String(error)}`, {
-        cause: error,
-      });
-    }
-
-    this.logger.info({ file: zipPath }, 'created zip file');
-    return zipPath;
   }
 
   private async existingFiles(files: readonly string[]): Promise<string[]> {

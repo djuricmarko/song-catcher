@@ -11,15 +11,6 @@ import type { ApiFastifyInstance } from './types.js';
 
 const WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
 
-export function contentDisposition(filename: string): string {
-  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  const encoded = encodeURIComponent(filename).replace(
-    /['()*]/g,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
-}
-
 function renderIndexPage(indexHtml: string, prefix: string): string {
   const runtimeConfig = { apiRoot: `${prefix}/api`, appRoot: prefix };
   return indexHtml.replace(
@@ -75,11 +66,6 @@ export async function registerDownloads(app: ApiFastifyInstance, baseDir: string
         return isPathInside(realpathSync(rootPath), realpathSync(resolved));
       } catch {
         return false;
-      }
-    },
-    setHeaders: (response, filePath) => {
-      if (filePath.endsWith('.zip')) {
-        response.header('Content-Disposition', contentDisposition(path.basename(filePath)));
       }
     },
   });
