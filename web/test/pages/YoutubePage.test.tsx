@@ -18,7 +18,7 @@ describe('YoutubePage', () => {
     const fetchMock = mockFetch({ 'GET /config': config(false) });
     renderWithProviders(<YoutubePage />);
     await userEvent.type(screen.getByLabelText('Video URL'), 'ftp://x');
-    await userEvent.click(screen.getByRole('button', { name: /Extract/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
     expect(toast.error).toHaveBeenCalledWith('Enter an http(s) URL');
     expect(fetchMock).not.toHaveBeenCalledWith('/api/youtubedl', expect.anything());
   });
@@ -33,10 +33,10 @@ describe('YoutubePage', () => {
       },
     });
     renderWithProviders(<YoutubePage />);
-    await userEvent.click(await screen.findByText('Add to MPD playlist'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add to MPD playlist' }));
     const input = screen.getByLabelText('Video URL');
     await userEvent.type(input, '  https://youtu.be/x  ');
-    await userEvent.click(screen.getByRole('button', { name: /Extract/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Download queued', { description: 'Task #7' });
     });
@@ -54,15 +54,12 @@ describe('YoutubePage', () => {
       },
     });
     renderWithProviders(<YoutubePage />);
-    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
-
     const input = screen.getByLabelText('Video URL');
     await userEvent.type(input, 'https://www.youtube.com/playlist?list=PL123');
     // A playlist page has no single video, so there is nothing to choose.
-    expect(screen.queryByText('Download the entire playlist')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByText('Pack into a zip'));
-    await userEvent.click(await screen.findByText('Add to MPD playlist'));
-    await userEvent.click(screen.getByRole('button', { name: /Extract playlist/ }));
+    expect(screen.queryByRole('button', { name: 'Entire playlist' })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Add to MPD playlist' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download playlist' }));
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Playlist queued', { description: 'Task #9' });
@@ -70,11 +67,9 @@ describe('YoutubePage', () => {
     expect(body).toEqual({
       url: 'https://www.youtube.com/playlist?list=PL123',
       add_to_playlist: true,
-      create_zip: true,
     });
     expect(fetchMock).not.toHaveBeenCalledWith('/api/youtubedl', expect.anything());
     expect(input).toHaveValue('');
-    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
   });
 
   it('downloads only the video of a playlist link unless asked for the playlist', async () => {
@@ -93,29 +88,28 @@ describe('YoutubePage', () => {
     const input = screen.getByLabelText('Video URL');
 
     await userEvent.type(input, link);
-    expect(screen.getByText('Download the entire playlist')).toBeInTheDocument();
-    expect(screen.queryByText('Pack into a zip')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Extract' }));
+    expect(screen.getByRole('button', { name: 'Entire playlist' })).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Download queued', { description: 'Task #1' });
     });
 
     await userEvent.type(input, link);
-    await userEvent.click(screen.getByText('Download the entire playlist'));
-    expect(screen.getByText('Pack into a zip')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Extract playlist/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Entire playlist' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download playlist' }));
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Playlist queued', { description: 'Task #2' });
     });
 
     expect(requests).toEqual([
       { path: '/youtubedl', body: { url: link, add_to_playlist: false } },
-      { path: '/playlist/youtube', body: { url: link, add_to_playlist: false, create_zip: false } },
+      { path: '/playlist/youtube', body: { url: link, add_to_playlist: false } },
     ]);
 
     // The choice does not carry over to the next link.
     await userEvent.type(input, link);
-    expect(screen.getByRole('button', { name: 'Extract' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Entire playlist' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
   });
 
   it('shows API errors', async () => {
@@ -125,7 +119,7 @@ describe('YoutubePage', () => {
     });
     renderWithProviders(<YoutubePage />);
     await userEvent.type(screen.getByLabelText('Video URL'), 'https://x');
-    await userEvent.click(screen.getByRole('button', { name: /Extract/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Unsupported');
     });
@@ -143,7 +137,7 @@ describe('YoutubePage', () => {
     );
     renderWithProviders(<YoutubePage />);
     await userEvent.type(screen.getByLabelText('Video URL'), 'https://x');
-    await userEvent.click(screen.getByRole('button', { name: /Extract/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download' }));
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('offline');
     });

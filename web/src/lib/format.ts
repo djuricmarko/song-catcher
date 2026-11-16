@@ -24,14 +24,11 @@ export function formatClockTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export function formatDuration(milliseconds: number): string {
-  const seconds = Math.max(0, Math.round(milliseconds / 1000));
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
-}
-
 export function formatIndex(position: number): string {
   return String(position).padStart(2, '0');
+}
+
+export function formatDate(value: string | number): string {
+  const date = typeof value === 'number' ? new Date(value) : new Date(`${value}T00:00:00`);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }

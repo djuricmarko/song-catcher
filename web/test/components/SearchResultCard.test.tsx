@@ -18,7 +18,7 @@ describe('SearchResultCard track row', () => {
     expect(screen.getByText('LP')).toBeInTheDocument();
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://img');
     expect(screen.queryByRole('button', { name: /preview/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Get' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Get Hey' }));
     expect(onDownloadTrack).toHaveBeenCalledWith(result);
   });
 
@@ -26,7 +26,7 @@ describe('SearchResultCard track row', () => {
     render(<SearchResultCard result={makeResult({ title: '', album: '' })} index={0} busy onDownloadTrack={vi.fn()} />);
     expect(screen.getByText('Unknown')).toBeInTheDocument();
     expect(screen.queryByText('/')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Get/ })).toBeDisabled();
   });
 
   it('toggles previews', async () => {
@@ -59,7 +59,7 @@ describe('SearchResultCard track row', () => {
   });
 });
 
-describe('SearchResultCard tiles', () => {
+describe('SearchResultCard album and artist rows', () => {
   it('renders an album with its actions', async () => {
     const onShowAlbumTracks = vi.fn();
     const onDownloadAlbum = vi.fn();
@@ -74,11 +74,10 @@ describe('SearchResultCard tiles', () => {
         onDownloadAlbum={onDownloadAlbum}
       />,
     );
-    expect(screen.getByText('Album', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('LP')).toBeInTheDocument();
     expect(screen.getByText('Band')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Tracks' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Album' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Get album LP' }));
     expect(onShowAlbumTracks).toHaveBeenCalledWith(result);
     expect(onDownloadAlbum).toHaveBeenCalledWith(result);
   });
@@ -94,7 +93,7 @@ describe('SearchResultCard tiles', () => {
     );
     expect(screen.getByText('Unknown')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Tracks' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Album' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Get album/ }));
   });
 
   it('renders an artist with its actions', async () => {

@@ -6,11 +6,12 @@ import { SearchResultCard } from '../../components/SearchResultCard';
 import { Button } from '../../components/ui/Button';
 import type { PreviewPlayer } from '../../hooks/usePreviewPlayer';
 
-import styles from './SearchPage.module.css';
+import styles from './DeezerPage.module.css';
 
 export interface AlbumTracks {
   albumId: number;
   title: string;
+  artist: string;
   tracks: SearchResultDto[];
 }
 
@@ -20,7 +21,7 @@ interface AlbumTracklistProps {
   downloading: boolean;
   preview: PreviewPlayer;
   onBack: () => void;
-  onDownloadAlbum: (albumId: number) => void;
+  onDownloadAlbum: (album: AlbumTracks) => void;
   onDownloadTrack: (track: SearchResultDto) => void;
 }
 
@@ -34,7 +35,7 @@ export function AlbumTracklist({
   onDownloadTrack,
 }: AlbumTracklistProps) {
   return (
-    <section className={styles.resultsSection}>
+    <section className={styles.results}>
       <div className={styles.sectionHeader}>
         <Button size="sm" variant="quiet" onClick={onBack}>
           <ArrowLeft size={12} aria-hidden />
@@ -47,16 +48,18 @@ export function AlbumTracklist({
           <h2 className={styles.albumTitle}>{album.title}</h2>
         </div>
         <Button
+          size="sm"
+          variant="outline"
           disabled={downloading}
           onClick={() => {
-            onDownloadAlbum(album.albumId);
+            onDownloadAlbum(album);
           }}
         >
-          <Download size={16} aria-hidden />
+          <Download size={13} strokeWidth={1.75} aria-hidden />
           Download album
         </Button>
       </div>
-      <div className={styles.trackList}>
+      <div className={styles.list}>
         {album.tracks.map((track, index) => (
           <SearchResultCard
             key={`album-track-${track.id}`}

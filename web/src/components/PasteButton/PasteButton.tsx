@@ -38,7 +38,7 @@ export function PasteButton({ onPaste, label = 'Paste from clipboard' }: PasteBu
         );
       }}
     >
-      <ClipboardPaste size={18} aria-hidden />
+      <ClipboardPaste size={16} strokeWidth={1.75} aria-hidden />
     </button>
   );
 }

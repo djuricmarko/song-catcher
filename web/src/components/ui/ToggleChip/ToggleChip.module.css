@@ -1,0 +1,36 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  height: 1.5rem;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  transition: color var(--dur) var(--ease);
+}
+
+.chip:hover,
+.chip[data-pressed] {
+  color: var(--ink);
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid currentcolor;
+  border-radius: 3px;
+}
+
+.chip[data-pressed] .box {
+  border-color: var(--signal);
+  background-color: var(--signal);
+  color: var(--on-signal);
+}
+
+.chip:not([data-pressed]) .box svg {
+  visibility: hidden;
+}

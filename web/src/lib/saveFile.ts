@@ -39,7 +39,6 @@ export async function saveFile(url: string, fileName: string, onStart?: () => vo
     ['mp3', 'audio/mpeg'],
     ['flac', 'audio/flac'],
     ['m3u8', 'application/vnd.apple.mpegurl'],
-    ['zip', 'application/zip'],
   ]).get(extension);
 
   let handle: SaveFileHandle;

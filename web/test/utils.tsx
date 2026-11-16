@@ -152,7 +152,12 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions = {
 export function makeTask(overrides: Partial<QueueTask> = {}): QueueTask {
   return {
     id: 1,
-    description: 'Download track',
+    source: 'deezer',
+    kind: 'track',
+    title: 'Artist - Song',
+    subtitle: null,
+    date: null,
+    sizeBytes: 0,
     args: {},
     state: 'waiting',
     result: null,

@@ -3,7 +3,7 @@ import type { SearchResultDto } from '@song-catcher/shared';
 import { SearchResultCard } from '../../components/SearchResultCard';
 import type { PreviewPlayer } from '../../hooks/usePreviewPlayer';
 
-import styles from './SearchPage.module.css';
+import styles from './DeezerPage.module.css';
 
 interface SearchResultsProps {
   results: SearchResultDto[];
@@ -17,16 +17,14 @@ interface SearchResultsProps {
 }
 
 export function SearchResults({ results, busy, preview, ...actions }: SearchResultsProps) {
-  const showsTiles = results[0]?.id_type !== 'track';
-
   return (
-    <section className={styles.resultsSection}>
+    <section className={styles.results}>
       <div className={styles.sectionHeader}>
         <p className={styles.sectionLabel}>Results</p>
         <span className={styles.sectionRule} aria-hidden />
         <p className={styles.sectionLabel}>{results.length} found</p>
       </div>
-      <div className={showsTiles ? styles.tileGrid : styles.trackList}>
+      <div className={styles.list}>
         {results.map((result, index) => (
           <SearchResultCard
             key={`${result.id_type}-${result.id}`}

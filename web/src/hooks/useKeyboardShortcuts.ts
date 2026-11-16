@@ -7,7 +7,7 @@ export function useKeyboardShortcuts(paths: readonly string[]): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'm') {
-        const input = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]');
+        const input = document.querySelector<HTMLInputElement>('[data-composer-input]');
         if (input) {
           event.preventDefault();
           input.focus();

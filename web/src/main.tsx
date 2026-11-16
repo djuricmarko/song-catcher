@@ -7,7 +7,6 @@ import { Toaster } from 'sonner';
 import App from './App';
 import { APP_ROOT } from './api/client';
 import { QueueProvider } from './hooks/useQueue';
-import { COMPACT_LAYOUT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import { useTheme } from './hooks/useTheme';
 import './styles/global.css';
 
@@ -22,22 +21,6 @@ const queryClient = new QueryClient({
 
 function ThemedToaster() {
   const { preference } = useTheme();
-  const compact = useMediaQuery(COMPACT_LAYOUT_QUERY);
-
-  if (compact) {
-    const bottom = 'calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 0.75rem)';
-    return (
-      <Toaster
-        position="bottom-center"
-        theme={preference}
-        richColors
-        visibleToasts={2}
-        offset={{ bottom }}
-        mobileOffset={{ bottom, left: 12, right: 12 }}
-        swipeDirections={['left', 'right', 'bottom']}
-      />
-    );
-  }
   return <Toaster position="bottom-right" theme={preference} richColors />;
 }
 

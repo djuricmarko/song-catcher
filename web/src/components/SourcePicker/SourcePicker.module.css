@@ -1,0 +1,57 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background-color: var(--overlay);
+  backdrop-filter: blur(8px);
+  transition: opacity var(--dur) var(--ease);
+}
+
+.backdrop[data-starting-style],
+.backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.popup {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  width: 14rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background-color: var(--surface-raised);
+  box-shadow: var(--shadow-popup);
+  transform: translateX(-50%);
+  transition: opacity var(--dur) var(--ease);
+}
+
+.popup[data-starting-style],
+.popup[data-ending-style] {
+  opacity: 0;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-2xs);
+  text-align: left;
+  color: var(--ink-faint);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.option:hover,
+.option:focus-visible {
+  background-color: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
