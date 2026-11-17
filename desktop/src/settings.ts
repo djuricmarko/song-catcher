@@ -48,6 +48,10 @@ export function mergeSettings(defaults: Settings, stored: unknown): Settings {
   return merged.success ? merged.data : defaults;
 }
 
+export function needsRestart(running: Settings, next: Settings): boolean {
+  return (Object.keys(next) as Array<keyof Settings>).some((key) => key !== 'theme' && running[key] !== next[key]);
+}
+
 export function settingsIssues(error: z.ZodError): string {
   return [...new Set(error.issues.map((issue) => issue.message))].join('\n');
 }

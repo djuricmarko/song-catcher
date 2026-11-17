@@ -13,21 +13,20 @@ import {
   SquarePen,
 } from 'lucide-react';
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
 
 import type { QueueTask, TaskSource, TaskState } from '@song-catcher/shared';
 
 import { useQueue } from '../../hooks/useQueue';
 import { cn } from '../../lib/cn';
-import { desktopApp } from '../../lib/desktop';
 import { QueueItem } from '../QueueItem';
-import { SettingsDialog } from '../SettingsDialog';
 import { SOURCE_NAMES } from '../SourceLogo';
 import { SourcePicker } from '../SourcePicker';
 
 import styles from './Sidebar.module.css';
 
 type SourceFilter = 'all' | TaskSource;
+
+export type AppDialog = 'settings' | 'logs' | 'library';
 
 const STATE_ORDER: Record<TaskState, number> = { active: 0, waiting: 1, failed: 2, 'mission accomplished': 3 };
 
@@ -79,13 +78,17 @@ function SourceFilterMenu({
   );
 }
 
-export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
+interface SidebarProps {
+  onCollapse: () => void;
+  onOpenDialog: (dialog: AppDialog) => void;
+}
+
+export function Sidebar({ onCollapse, onOpenDialog }: SidebarProps) {
   const { tasks, error } = useQueue();
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>('all');
   const [completedOpen, setCompletedOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const needle = query.trim().toLowerCase();
   const visible = tasks.filter((task) => matches(task, source, needle));
@@ -186,38 +189,26 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
       <div className={styles.footer}>
         <div className={styles.footerLinks}>
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Settings"
-            title="Settings"
-            onClick={() => {
-              const desktop = desktopApp();
-              if (desktop) {
-                desktop.openSettings();
-              } else {
-                setSettingsOpen(true);
-              }
-            }}
-          >
-            <Settings size={14} strokeWidth={1.75} aria-hidden />
-          </button>
-          <NavLink
-            to="/debug"
-            className={({ isActive }) => cn(styles.iconButton, isActive && styles.iconButtonOn)}
-            aria-label="Logs"
-            title="Logs"
-          >
-            <ChartNoAxesColumn size={14} strokeWidth={1.75} aria-hidden />
-          </NavLink>
-          <NavLink
-            to="/files"
-            className={({ isActive }) => cn(styles.iconButton, isActive && styles.iconButtonOn)}
-            aria-label="Library"
-            title="Library"
-          >
-            <FolderOpen size={14} strokeWidth={1.75} aria-hidden />
-          </NavLink>
+          {(
+            [
+              { dialog: 'settings', label: 'Settings', icon: Settings },
+              { dialog: 'logs', label: 'Logs', icon: ChartNoAxesColumn },
+              { dialog: 'library', label: 'Library', icon: FolderOpen },
+            ] satisfies Array<{ dialog: AppDialog; label: string; icon: typeof Settings }>
+          ).map(({ dialog, label, icon: Icon }) => (
+            <button
+              key={dialog}
+              type="button"
+              className={styles.iconButton}
+              aria-label={label}
+              title={label}
+              onClick={() => {
+                onOpenDialog(dialog);
+              }}
+            >
+              <Icon size={14} strokeWidth={1.75} aria-hidden />
+            </button>
+          ))}
         </div>
         <span className={styles.update} aria-hidden>
           <CircleArrowUp size={14} strokeWidth={1.75} />
@@ -225,7 +216,6 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       </div>
 
       <SourcePicker open={pickerOpen} onOpenChange={setPickerOpen} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   );
 }

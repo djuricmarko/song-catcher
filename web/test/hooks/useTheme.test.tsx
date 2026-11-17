@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyTheme, useTheme } from '../../src/hooks/useTheme';
-import { setMatchMedia } from '../utils';
+import { installDesktopApp, setMatchMedia } from '../utils';
 
 const DARK = '(prefers-color-scheme: dark)';
 let meta: HTMLMetaElement;
@@ -97,13 +97,9 @@ describe('useTheme', () => {
   it('follows the system inside the desktop app, where the theme is a desktop setting', () => {
     window.localStorage.setItem('dd-theme', 'light');
     setMatchMedia({ [DARK]: true });
-    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn() };
-    try {
-      const { result } = renderHook(() => useTheme());
-      expect(result.current.preference).toBe('system');
-      expect(document.documentElement.dataset.theme).toBe('dark');
-    } finally {
-      delete window.songCatcherApp;
-    }
+    installDesktopApp();
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.preference).toBe('system');
+    expect(document.documentElement.dataset.theme).toBe('dark');
   });
 });

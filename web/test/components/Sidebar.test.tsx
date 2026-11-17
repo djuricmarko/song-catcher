@@ -1,19 +1,21 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { QueueTask } from '@song-catcher/shared';
 
 import { Sidebar } from '../../src/components/Sidebar';
 import { MockEventSource, jsonResponse, makeTask, mockFetch, renderWithProviders } from '../utils';
 
-function renderSidebar(tasks: QueueTask[] = [], onCollapse = vi.fn()) {
-  mockFetch({ 'GET /queue': [], 'GET /config': { version: '9.9.9', useMpd: true, urlPrefix: '' } });
-  renderWithProviders(<Sidebar onCollapse={onCollapse} />, { withQueue: true });
+function renderSidebar(tasks: QueueTask[] = []) {
+  const onCollapse = vi.fn();
+  const onOpenDialog = vi.fn();
+  mockFetch({ 'GET /queue': [] });
+  renderWithProviders(<Sidebar onCollapse={onCollapse} onOpenDialog={onOpenDialog} />, { withQueue: true });
   act(() => {
     MockEventSource.latest().emit('snapshot', tasks);
   });
-  return onCollapse;
+  return { onCollapse, onOpenDialog };
 }
 
 function titles(listName: string): Array<string | null> {
@@ -30,10 +32,6 @@ const QUEUE = [
   makeTask({ id: 5, title: 'New song', state: 'mission accomplished' }),
 ];
 
-afterEach(() => {
-  delete window.songCatcherApp;
-});
-
 describe('Sidebar queue', () => {
   it('says so when nothing is downloading', () => {
     renderSidebar();
@@ -43,7 +41,7 @@ describe('Sidebar queue', () => {
 
   it('shows load errors', async () => {
     mockFetch({ 'GET /queue': () => jsonResponse({ error: 'down' }, { status: 500 }) });
-    renderWithProviders(<Sidebar onCollapse={vi.fn()} />, { withQueue: true });
+    renderWithProviders(<Sidebar onCollapse={vi.fn()} onOpenDialog={vi.fn()} />, { withQueue: true });
     expect(await screen.findByText('Could not load the queue: down')).toBeInTheDocument();
   });
 
@@ -177,37 +175,16 @@ describe('Sidebar queue', () => {
 
 describe('Sidebar controls', () => {
   it('collapses on request', async () => {
-    const onCollapse = renderSidebar();
+    const { onCollapse } = renderSidebar();
     await userEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
     expect(onCollapse).toHaveBeenCalledOnce();
   });
 
-  it('links to the logs and the library next to the settings', () => {
-    renderSidebar();
-    expect(screen.getByRole('link', { name: 'Logs' })).toHaveAttribute('href', '/debug');
-    expect(screen.getByRole('link', { name: 'Library' })).toHaveAttribute('href', '/files');
-  });
-
-  it('opens the theme and version settings in the browser', async () => {
-    renderSidebar();
+  it('opens the settings, the logs and the library', async () => {
+    const { onOpenDialog } = renderSidebar();
     await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Settings' });
-    expect(await within(dialog).findByText('v9.9.9')).toBeInTheDocument();
-    expect(within(dialog).getByText('Linked')).toBeInTheDocument();
-
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Dark theme' }));
-    expect(document.documentElement.dataset.theme).toBe('dark');
-
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Close settings' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('opens the desktop settings window in the desktop app', async () => {
-    const openSettings = vi.fn();
-    window.songCatcherApp = { platform: 'linux', openSettings };
-    renderSidebar();
-    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
-    expect(openSettings).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Logs' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Library' }));
+    expect(onOpenDialog.mock.calls).toEqual([['settings'], ['logs'], ['library']]);
   });
 });

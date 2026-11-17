@@ -1,15 +1,16 @@
-import { ChartNoAxesColumn, Ellipsis, FolderOpen, PanelLeft } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Ellipsis, PanelLeft } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-import { Sidebar } from './components/Sidebar';
+import { LibraryDialog } from './components/LibraryDialog';
+import { LogsDialog } from './components/LogsDialog';
+import { SettingsDialog } from './components/SettingsDialog';
+import { Sidebar, type AppDialog } from './components/Sidebar';
 import { SourceLabel } from './components/SourceLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { cn } from './lib/cn';
 import { desktopApp } from './lib/desktop';
-import { DebugPage } from './pages/DebugPage';
 import { DeezerPage } from './pages/DeezerPage';
-import { FilesPage } from './pages/FilesPage';
 import { YoutubePage } from './pages/YoutubePage';
 
 import styles from './App.module.css';
@@ -22,24 +23,6 @@ const VIEWS: Array<{ path: string; crumbs: ReactNode[] }> = [
     crumbs: [<SourceLabel key="source" source="youtube" className={styles.crumb} />, 'New Download'],
   },
   { path: '/deezer', crumbs: [<SourceLabel key="source" source="deezer" className={styles.crumb} />, 'New Download'] },
-  {
-    path: '/files',
-    crumbs: [
-      <span key="library" className={styles.crumb}>
-        <FolderOpen size={14} strokeWidth={1.75} aria-hidden />
-        Library
-      </span>,
-    ],
-  },
-  {
-    path: '/debug',
-    crumbs: [
-      <span key="logs" className={styles.crumb}>
-        <ChartNoAxesColumn size={14} strokeWidth={1.75} aria-hidden />
-        Logs
-      </span>,
-    ],
-  },
 ];
 
 function readSidebarCollapsed(): boolean {
@@ -68,11 +51,36 @@ function Breadcrumb() {
 
 export default function App() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
+  const [dialog, setDialog] = useState<AppDialog | null>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const showMenu = desktopApp()?.showMenu;
 
-  useKeyboardShortcuts(VIEWS.map((view) => view.path));
+  const shortcuts = useMemo(
+    () => [
+      ...VIEWS.map((view) => () => {
+        setDialog(null);
+        void navigate(view.path);
+      }),
+      () => {
+        setDialog('library');
+      },
+      () => {
+        setDialog('logs');
+      },
+    ],
+    [navigate],
+  );
+  useKeyboardShortcuts(shortcuts);
+
+  useEffect(
+    () =>
+      desktopApp()?.onOpenSettings(() => {
+        setDialog('settings');
+      }),
+    [],
+  );
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -80,6 +88,12 @@ export default function App() {
       viewRef.current.scrollTop = 0;
     }
   }, [pathname]);
+
+  function closeDialogOn(name: AppDialog) {
+    return (open: boolean) => {
+      setDialog((current) => (open ? name : current === name ? null : current));
+    };
+  }
 
   function collapse(next: boolean) {
     setCollapsed(next);
@@ -95,6 +109,7 @@ export default function App() {
           onCollapse={() => {
             collapse(true);
           }}
+          onOpenDialog={setDialog}
         />
       )}
 
@@ -133,12 +148,14 @@ export default function App() {
           <Routes>
             <Route path="/youtube" element={<YoutubePage />} />
             <Route path="/deezer" element={<DeezerPage />} />
-            <Route path="/files/*" element={<FilesPage />} />
-            <Route path="/debug" element={<DebugPage />} />
             <Route path="*" element={<Navigate to="/youtube" replace />} />
           </Routes>
         </div>
       </main>
+
+      <SettingsDialog open={dialog === 'settings'} onOpenChange={closeDialogOn('settings')} />
+      <LogsDialog open={dialog === 'logs'} onOpenChange={closeDialogOn('logs')} />
+      <LibraryDialog open={dialog === 'library'} onOpenChange={closeDialogOn('library')} />
     </div>
   );
 }

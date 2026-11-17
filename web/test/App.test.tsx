@@ -1,9 +1,9 @@
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../src/App';
-import { MockEventSource, makeTask, mockFetch, renderWithProviders } from './utils';
+import { MockEventSource, installDesktopApp, makeTask, mockFetch, renderWithProviders } from './utils';
 
 function setup(route = '/') {
   mockFetch({
@@ -34,9 +34,7 @@ describe('App', () => {
   it.each([
     ['/youtube', 'YouTube/New Download'],
     ['/deezer', 'Deezer/New Download'],
-    ['/files', 'Library'],
-    ['/files/some/dir', 'Library'],
-    ['/debug', 'Logs'],
+    ['/files', 'YouTube/New Download'],
     ['/nope', 'YouTube/New Download'],
   ])('routes %s', (route, crumbs) => {
     setup(route);
@@ -53,39 +51,69 @@ describe('App', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('opens the library and the logs from the sidebar footer', async () => {
-    setup();
-    await userEvent.click(screen.getByRole('link', { name: 'Library' }));
-    expect(breadcrumb()).toHaveTextContent('Library');
-    await userEvent.click(screen.getByRole('link', { name: 'Logs' }));
-    expect(breadcrumb()).toHaveTextContent('Logs');
-  });
+  it.each(['Settings', 'Logs', 'Library'])(
+    'opens %s in a dialog from the sidebar footer and closes it',
+    async (name) => {
+      setup();
+      await userEvent.click(screen.getByRole('button', { name }));
+      const dialog = await screen.findByRole('dialog', { name });
 
-  it('switches views with Ctrl+Shift+digit', () => {
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+      expect(breadcrumb()).toHaveTextContent('YouTube/New Download');
+    },
+  );
+
+  it('switches views and opens the library and logs with Ctrl+Shift+digit', async () => {
     setup();
     fireEvent.keyDown(window, { code: 'Digit2', key: '@', ctrlKey: true, shiftKey: true });
     expect(breadcrumb()).toHaveTextContent('Deezer/New Download');
+
     fireEvent.keyDown(window, { code: 'Digit3', key: '#', ctrlKey: true, shiftKey: true });
-    expect(breadcrumb()).toHaveTextContent('Library');
+    expect(await screen.findByRole('dialog', { name: 'Library' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { code: 'Digit4', key: '$', ctrlKey: true, shiftKey: true });
+    expect(await screen.findByRole('dialog', { name: 'Logs' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument();
+    });
+
     fireEvent.keyDown(window, { code: 'Digit7', key: '&', ctrlKey: true, shiftKey: true });
     fireEvent.keyDown(window, { code: 'Digit1', key: '!', ctrlKey: true, shiftKey: true, altKey: true });
     fireEvent.keyDown(window, { code: 'Digit1', key: '1', ctrlKey: true });
-    expect(breadcrumb()).toHaveTextContent('Library');
+    expect(screen.getByRole('dialog', { name: 'Logs' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { code: 'Digit1', key: '!', ctrlKey: true, shiftKey: true });
+    expect(breadcrumb()).toHaveTextContent('YouTube/New Download');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
-  it('focuses the composer with Ctrl+M when there is one', () => {
+  it('focuses the composer with Ctrl+M but not with other modifiers', () => {
     setup('/deezer');
+    fireEvent.keyDown(window, { key: 'm', ctrlKey: true, altKey: true });
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Search query'));
     fireEvent.keyDown(window, { key: 'M', ctrlKey: true });
     expect(document.activeElement).toBe(screen.getByLabelText('Search query'));
   });
 
-  it('ignores Ctrl+M without a composer and with other modifiers', () => {
-    setup('/debug');
-    const event = new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, cancelable: true });
-    window.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(false);
-    fireEvent.keyDown(window, { key: 'm', ctrlKey: true, altKey: true });
-    expect(breadcrumb()).toHaveTextContent('Logs');
+  it('opens the settings when the desktop app asks for them', async () => {
+    let openSettings: (() => void) | undefined;
+    const unsubscribe = vi.fn();
+    installDesktopApp({
+      onOpenSettings: (listener) => {
+        openSettings = listener;
+        return unsubscribe;
+      },
+    });
+    setup();
+    act(() => {
+      openSettings?.();
+    });
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Search settings')).toBeInTheDocument();
   });
 
   it('hides the sidebar and remembers it', async () => {
@@ -113,16 +141,12 @@ describe('App', () => {
 
   it('offers the application menu where the desktop window has no menu bar', async () => {
     const showMenu = vi.fn();
-    window.songCatcherApp = { platform: 'linux', openSettings: vi.fn(), showMenu };
-    try {
-      setup();
-      const button = screen.getByRole('button', { name: 'Menu' });
-      vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(new DOMRect(900, 11, 26, 26));
-      await userEvent.click(button);
-      expect(showMenu).toHaveBeenCalledWith(900, 41);
-    } finally {
-      delete window.songCatcherApp;
-    }
+    installDesktopApp({ showMenu });
+    setup();
+    const button = screen.getByRole('button', { name: 'Menu' });
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(new DOMRect(900, 11, 26, 26));
+    await userEvent.click(button);
+    expect(showMenu).toHaveBeenCalledWith(900, 41);
   });
 
   it('has no menu button in a browser', () => {
