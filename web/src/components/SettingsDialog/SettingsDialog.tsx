@@ -1,10 +1,16 @@
-import { Dialog } from '@base-ui/react/dialog';
-import { X } from 'lucide-react';
+import type { SettingsBridge } from '@song-catcher/shared';
 
-import { useAppConfig } from '../../hooks/useAppConfig';
-import { ThemeSwitch } from '../ThemeSwitch';
+import { useQueue } from '../../hooks/useQueue';
+import { desktopApp } from '../../lib/desktop';
+import { LargeDialog } from '../LargeDialog';
+import { DesktopSettings } from './DesktopSettings';
+import { WebSettings } from './WebSettings';
 
-import styles from './SettingsDialog.module.css';
+function AppSettings({ bridge, onClose }: { bridge: SettingsBridge; onClose: () => void }) {
+  const { tasks } = useQueue();
+  const activeDownloads = tasks.filter((task) => task.state === 'active' || task.state === 'waiting').length;
+  return <DesktopSettings bridge={bridge} mode="dialog" onClose={onClose} activeDownloads={activeDownloads} />;
+}
 
 interface SettingsDialogProps {
   open: boolean;
@@ -12,37 +18,14 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const config = useAppConfig();
+  const desktop = desktopApp();
+  const close = () => {
+    onOpenChange(false);
+  };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className={styles.backdrop} />
-        <Dialog.Popup className={styles.popup}>
-          <div className={styles.head}>
-            <Dialog.Title className={styles.title}>Settings</Dialog.Title>
-            <Dialog.Close className={styles.close} aria-label="Close settings">
-              <X size={14} strokeWidth={1.75} aria-hidden />
-            </Dialog.Close>
-          </div>
-          <div className={styles.row}>
-            <span>Theme</span>
-            <ThemeSwitch />
-          </div>
-          {config.data ? (
-            <>
-              <div className={styles.row}>
-                <span>MPD</span>
-                <span className={styles.value}>{config.data.useMpd ? 'Linked' : 'Off'}</span>
-              </div>
-              <div className={styles.row}>
-                <span>Version</span>
-                <span className={styles.value}>v{config.data.version}</span>
-              </div>
-            </>
-          ) : null}
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <LargeDialog open={open} onOpenChange={onOpenChange} label="Settings">
+      {desktop ? <AppSettings bridge={desktop.settings} onClose={close} /> : <WebSettings onClose={close} />}
+    </LargeDialog>
   );
 }

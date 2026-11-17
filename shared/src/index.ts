@@ -92,6 +92,40 @@ export interface DebugResponse {
   debug_msg: string;
 }
 
+export interface DesktopSettings {
+  arl: string;
+  quality: 'mp3' | 'flac';
+  downloadDir: string;
+  proxyUrl: string;
+  workers: number;
+  youtubePlaylistMax: number;
+  mpdEnabled: boolean;
+  mpdHost: string;
+  mpdPort: number;
+  mpdMusicDir: string;
+  theme: 'system' | 'light' | 'dark';
+}
+
+export type DesktopTool = 'yt-dlp' | 'ffmpeg' | 'metaflac';
+
+export interface DesktopSettingsState {
+  settings: DesktopSettings;
+  defaults: DesktopSettings;
+  notice: string | undefined;
+  tools: Record<DesktopTool, boolean>;
+  secretsEncrypted: boolean;
+  version: string;
+}
+
+export type SaveSettingsResult = { ok: true } | { ok: false; message: string };
+
+export interface SettingsBridge {
+  load: () => Promise<DesktopSettingsState>;
+  save: (settings: DesktopSettings) => Promise<SaveSettingsResult>;
+  chooseDirectory: (current: string) => Promise<string | undefined>;
+  setTheme: (theme: DesktopSettings['theme']) => void;
+}
+
 export type SearchType = 'track' | 'album' | 'artist' | 'album_track' | 'artist_album' | 'artist_top';
 
 export type SearchResultKind = 'track' | 'album' | 'artist';

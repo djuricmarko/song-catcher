@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
-import type { QueueTask } from '@song-catcher/shared';
+import type { DesktopSettingsState, QueueTask, SaveSettingsResult } from '@song-catcher/shared';
 import {
   app,
   BrowserWindow,
@@ -13,15 +13,16 @@ import {
   screen,
   session,
   shell,
+  type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron';
 
-import type { SaveResult, SettingsState } from './bridge.js';
 import { EmbeddedServer, type StartedServer } from './embedded-server.js';
 import { loadSettings, saveSettings, secretsEncrypted } from './settings-store.js';
 import {
   defaultSettings,
+  needsRestart,
   serverEnvironment,
   settingsIssues,
   settingsSchema,
@@ -63,6 +64,7 @@ const LOGIN_REJECTED =
   'YouTube downloads keep working.';
 
 let settings: Settings;
+let defaults: Settings;
 let mainWindow: BrowserWindow | undefined;
 let settingsWindow: BrowserWindow | undefined;
 let settingsNotice: string | undefined;
@@ -72,7 +74,7 @@ const server = new EmbeddedServer(() => {
   if (quitConfirmed) {
     return;
   }
-  openSettings('The download service stopped unexpectedly. Save to start it again.');
+  openSettingsWindow('The download service stopped unexpectedly. Save to start it again.');
   mainWindow?.destroy();
 });
 
@@ -248,9 +250,18 @@ function trackWindowState(window: BrowserWindow, initial: WindowState | undefine
   });
 }
 
-function showMainWindow(origin: string): void {
+function loadApp(window: BrowserWindow, origin: string, withSettings: boolean): void {
+  if (withSettings) {
+    window.webContents.once('did-finish-load', () => {
+      window.webContents.send('app:open-settings');
+    });
+  }
+  void window.loadURL(`${origin}/`);
+}
+
+function showMainWindow(origin: string, withSettings: boolean): void {
   if (mainWindow) {
-    void mainWindow.loadURL(`${origin}/`);
+    loadApp(mainWindow, origin, withSettings);
     mainWindow.focus();
     return;
   }
@@ -325,11 +336,22 @@ function showMainWindow(origin: string): void {
     mainWindow = undefined;
   });
 
-  void window.loadURL(`${origin}/`);
+  loadApp(window, origin, withSettings);
 }
 
-function openSettings(notice?: string): void {
-  settingsNotice = notice;
+function openSettings(): void {
+  if (!mainWindow) {
+    openSettingsWindow();
+    return;
+  }
+  mainWindow.webContents.send('app:open-settings');
+  mainWindow.focus();
+}
+
+function openSettingsWindow(notice?: string): void {
+  if (notice) {
+    settingsNotice = notice;
+  }
   if (settingsWindow) {
     settingsWindow.reload();
     settingsWindow.focus();
@@ -337,9 +359,9 @@ function openSettings(notice?: string): void {
   }
 
   const window = new BrowserWindow({
-    width: 620,
-    height: 780,
-    minWidth: 480,
+    width: 960,
+    height: 680,
+    minWidth: 760,
     minHeight: 520,
     show: false,
     title: 'Song Catcher Settings',
@@ -377,17 +399,15 @@ function openSettings(notice?: string): void {
 
 async function launch(): Promise<void> {
   if (!settings.arl) {
-    openSettings('Enter your Deezer ARL cookie to get started.');
+    openSettingsWindow('Enter your Deezer ARL cookie to get started.');
     return;
   }
   try {
     const { origin, loggedIn } = await startServer();
-    showMainWindow(origin);
-    if (!loggedIn) {
-      openSettings(LOGIN_REJECTED);
-    }
+    settingsNotice = loggedIn ? undefined : LOGIN_REJECTED;
+    showMainWindow(origin, !loggedIn);
   } catch (error) {
-    openSettings(startupFailure(error));
+    openSettingsWindow(startupFailure(error));
   }
 }
 
@@ -396,18 +416,36 @@ function startupFailure(error: unknown): string {
   return message.replaceAll('DEEZER_COOKIE_ARL', 'the ARL cookie');
 }
 
-function fromSettingsWindow(event: IpcMainInvokeEvent): boolean {
-  return event.sender === settingsWindow?.webContents;
+async function restartService(): Promise<SaveSettingsResult> {
+  try {
+    const { origin, loggedIn } = await startServer();
+    settingsNotice = loggedIn ? undefined : LOGIN_REJECTED;
+    settingsWindow?.close();
+    showMainWindow(origin, !loggedIn);
+    return { ok: true };
+  } catch (error) {
+    const message = startupFailure(error);
+    if (mainWindow) {
+      openSettingsWindow(message);
+      mainWindow.destroy();
+    }
+    return { ok: false, message };
+  }
+}
+
+function fromSettingsUi(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  return [settingsWindow, mainWindow].some((window) => window?.webContents === event.sender);
 }
 
 function registerSettingsIpc(): void {
-  ipcMain.handle('settings:load', async (event): Promise<SettingsState | undefined> => {
-    if (!fromSettingsWindow(event)) {
+  ipcMain.handle('settings:load', async (event): Promise<DesktopSettingsState | undefined> => {
+    if (!fromSettingsUi(event)) {
       return undefined;
     }
     const tools = findTools();
     return {
       settings,
+      defaults,
       notice: settingsNotice,
       tools: {
         'yt-dlp': tools['yt-dlp'] !== undefined,
@@ -415,12 +453,13 @@ function registerSettingsIpc(): void {
         metaflac: tools.metaflac !== undefined,
       },
       secretsEncrypted: await secretsEncrypted(),
+      version: app.getVersion(),
     };
   });
 
-  ipcMain.handle('settings:save', async (event, input: unknown): Promise<SaveResult> => {
-    if (!fromSettingsWindow(event)) {
-      return { ok: false, message: 'Settings can only be saved from the settings window.' };
+  ipcMain.handle('settings:save', async (event, input: unknown): Promise<SaveSettingsResult> => {
+    if (!fromSettingsUi(event)) {
+      return { ok: false, message: 'Settings can only be saved from Song Catcher.' };
     }
     const parsed = settingsSchema.safeParse(input);
     if (!parsed.success) {
@@ -430,29 +469,19 @@ function registerSettingsIpc(): void {
       return { ok: false, message: 'Enter your Deezer ARL cookie.' };
     }
 
+    const restart = !server.running || needsRestart(settings, parsed.data);
     settings = parsed.data;
     nativeTheme.themeSource = settings.theme;
     await saveSettings(settingsFile, settings);
-    try {
-      const { origin, loggedIn } = await startServer();
-      showMainWindow(origin);
-      if (!loggedIn) {
-        settingsWindow?.focus();
-        return { ok: false, message: LOGIN_REJECTED };
-      }
-    } catch (error) {
-      mainWindow?.destroy();
-      return { ok: false, message: startupFailure(error) };
-    }
-    settingsWindow?.close();
-    return { ok: true };
+    return restart ? restartService() : { ok: true };
   });
 
   ipcMain.handle('settings:choose-directory', async (event, current: unknown): Promise<string | undefined> => {
-    if (!settingsWindow || !fromSettingsWindow(event)) {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || !fromSettingsUi(event)) {
       return undefined;
     }
-    const { filePaths } = await dialog.showOpenDialog(settingsWindow, {
+    const { filePaths } = await dialog.showOpenDialog(window, {
       title: 'Choose the download folder',
       defaultPath: typeof current === 'string' ? current : undefined,
       properties: ['openDirectory', 'createDirectory'],
@@ -462,18 +491,12 @@ function registerSettingsIpc(): void {
 
   ipcMain.on('settings:set-theme', (event, input: unknown) => {
     const theme = settingsSchema.shape.theme.safeParse(input);
-    if (event.sender !== settingsWindow?.webContents || !theme.success) {
+    if (!fromSettingsUi(event) || !theme.success) {
       return;
     }
     settings = { ...settings, theme: theme.data };
     nativeTheme.themeSource = theme.data;
     void saveSettings(settingsFile, settings);
-  });
-
-  ipcMain.on('app:open-settings', (event) => {
-    if (event.sender === mainWindow?.webContents) {
-      openSettings();
-    }
   });
 
   ipcMain.on('app:show-menu', (event, x: unknown, y: unknown) => {
@@ -620,7 +643,8 @@ if (app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(async () => {
-    settings = await loadSettings(settingsFile, defaultSettings(path.join(app.getPath('music'), 'Song Catcher')));
+    defaults = defaultSettings(path.join(app.getPath('music'), 'Song Catcher'));
+    settings = await loadSettings(settingsFile, defaults);
     nativeTheme.themeSource = settings.theme;
     seedYtDlp();
     restrictPermissions();

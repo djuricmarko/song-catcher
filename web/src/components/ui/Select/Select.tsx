@@ -1,6 +1,8 @@
 import { Select as BaseSelect } from '@base-ui/react/select';
 import { Check, ChevronDown } from 'lucide-react';
 
+import { cn } from '../../../lib/cn';
+
 import styles from './Select.module.css';
 
 export interface SelectOption<T extends string> {
@@ -12,10 +14,17 @@ interface SelectProps<T extends string> {
   value: T;
   onValueChange: (value: T) => void;
   options: ReadonlyArray<SelectOption<T>>;
+  variant?: 'inline' | 'field';
   'aria-label': string;
 }
 
-export function Select<T extends string>({ value, onValueChange, options, 'aria-label': ariaLabel }: SelectProps<T>) {
+export function Select<T extends string>({
+  value,
+  onValueChange,
+  options,
+  variant = 'inline',
+  'aria-label': ariaLabel,
+}: SelectProps<T>) {
   return (
     <BaseSelect.Root
       value={value}
@@ -26,7 +35,7 @@ export function Select<T extends string>({ value, onValueChange, options, 'aria-
         }
       }}
     >
-      <BaseSelect.Trigger className={styles.trigger} aria-label={ariaLabel}>
+      <BaseSelect.Trigger className={cn(styles.trigger, styles[variant])} aria-label={ariaLabel}>
         <BaseSelect.Value />
         <BaseSelect.Icon className={styles.icon}>
           <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
@@ -40,7 +49,7 @@ export function Select<T extends string>({ value, onValueChange, options, 'aria-
           sideOffset={6}
           alignItemWithTrigger={false}
         >
-          <BaseSelect.Popup className={styles.popup}>
+          <BaseSelect.Popup className={cn(styles.popup, styles[variant])}>
             {options.map((option) => (
               <BaseSelect.Item key={option.value} value={option.value} className={styles.item}>
                 <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>

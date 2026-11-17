@@ -1,16 +1,18 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LibraryDialog } from '../../src/components/LibraryDialog';
 import * as saveFileModule from '../../src/lib/saveFile';
-import { FilesPage } from '../../src/pages/FilesPage';
 import { jsonResponse, mockFetch, renderWithProviders } from '../utils';
 
 const entry = (name: string, path: string, isDirectory = false, size = 0) => ({ name, path, isDirectory, size });
 
-function renderFiles(route = '/files') {
-  return renderWithProviders(<FilesPage />, { route, path: '/files/*' });
+function renderFiles() {
+  const onOpenChange = vi.fn();
+  renderWithProviders(<LibraryDialog open onOpenChange={onOpenChange} />);
+  return onOpenChange;
 }
 
 beforeEach(() => {
@@ -19,7 +21,7 @@ beforeEach(() => {
   vi.spyOn(toast, 'loading');
 });
 
-describe('FilesPage', () => {
+describe('LibraryDialog', () => {
   it('lists folders and files with sizes and counts', async () => {
     mockFetch({
       'GET /files?path=': {
@@ -55,22 +57,35 @@ describe('FilesPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not list files: Outside root');
   });
 
-  it('navigates into folders and renders breadcrumbs', async () => {
+  it('navigates into folders and back through the breadcrumbs', async () => {
     mockFetch({
       'GET /files?path=': { path: '', entries: [entry('My Album', 'Artist/My Album', true)] },
       'GET /files?path=Artist%2FMy%20Album': {
         path: 'Artist/My Album',
         entries: [entry('a.mp3', 'Artist/My Album/a.mp3')],
       },
+      'GET /files?path=Artist': { path: 'Artist', entries: [entry('My Album', 'Artist/My Album', true)] },
     });
     renderFiles();
     await userEvent.click(await screen.findByRole('button', { name: 'My Album' }));
     expect(await screen.findByText('a.mp3')).toBeInTheDocument();
     const breadcrumb = screen.getByRole('navigation', { name: 'Folder' });
     expect(breadcrumb).toHaveTextContent('downloads/Artist/My Album');
-    expect(screen.getByRole('link', { name: 'Artist' })).toHaveAttribute('href', '/files/Artist');
-    expect(screen.getByRole('link', { name: 'My Album' })).toHaveAttribute('href', '/files/Artist/My%20Album');
-    expect(screen.getByRole('link', { name: 'downloads' })).toHaveAttribute('href', '/files');
+
+    await userEvent.click(within(breadcrumb).getByRole('button', { name: 'Artist' }));
+    expect(await screen.findByRole('button', { name: 'My Album' })).toBeInTheDocument();
+    expect(breadcrumb).toHaveTextContent('downloads/Artist');
+
+    await userEvent.click(within(breadcrumb).getByRole('button', { name: 'downloads' }));
+    expect(breadcrumb).toHaveTextContent(/^downloads$/);
+  });
+
+  it('closes from its header', async () => {
+    mockFetch({ 'GET /files?path=': { path: '', entries: [] } });
+    const onOpenChange = renderFiles();
+    expect(await screen.findByRole('dialog', { name: 'Library' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('refetches on refresh', async () => {

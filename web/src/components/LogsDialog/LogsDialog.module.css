@@ -1,0 +1,27 @@
+.alert {
+  margin: 1rem 1.5rem 0;
+}
+
+.output {
+  flex: 1 1 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+  overflow: auto;
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-sunken);
+  font-size: var(--text-2xs);
+  line-height: 1.7;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

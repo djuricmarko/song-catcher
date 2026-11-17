@@ -1,6 +1,9 @@
-interface DesktopApp {
+import type { SettingsBridge } from '@song-catcher/shared';
+
+export interface DesktopApp {
   platform: string;
-  openSettings: () => void;
+  settings: SettingsBridge;
+  onOpenSettings: (listener: () => void) => () => void;
   showMenu?: (x: number, y: number) => void;
 }
 
