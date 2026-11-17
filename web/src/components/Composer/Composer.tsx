@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ReactNode, SubmitEvent } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode, Ref, SubmitEvent } from 'react';
 
 import { cn } from '../../lib/cn';
 import { PasteButton } from '../PasteButton';
@@ -72,6 +72,16 @@ export function Composer({
   );
 }
 
-export function ComposerStage({ raised = false, children }: { raised?: boolean; children: ReactNode }) {
-  return <div className={cn(styles.stage, raised && styles.stageRaised)}>{children}</div>;
+interface ComposerStageProps {
+  raised?: boolean;
+  ref?: Ref<HTMLDivElement>;
+  children: ReactNode;
+}
+
+export function ComposerStage({ raised = false, ref, children }: ComposerStageProps) {
+  return (
+    <div ref={ref} className={cn(styles.stage, raised && styles.stageRaised)}>
+      {children}
+    </div>
+  );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { DownloadRequest, SearchResultDto, SearchType } from '@song-catcher/shared';
@@ -31,6 +31,12 @@ function parseDeezerId(value: string | number): number | undefined {
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
+function scrollToTop(element: Element | null) {
+  for (let node = element; node; node = node.parentElement) {
+    node.scrollTop = 0;
+  }
+}
+
 function trackLabel(track: SearchResultDto): Pick<DownloadRequest, 'title' | 'subtitle'> {
   return {
     title: [track.artist, track.title].filter(Boolean).join(' - ') || undefined,
@@ -48,8 +54,13 @@ export function DeezerPage() {
   const [searched, setSearched] = useState(false);
   const [addToPlaylist, setAddToPlaylist] = useState(false);
   const latestSearch = useRef(0);
+  const stageRef = useRef<HTMLDivElement>(null);
   const preview = usePreviewPlayer();
   const { busy: downloading, enqueue } = useEnqueue();
+
+  useLayoutEffect(() => {
+    scrollToTop(stageRef.current);
+  }, [results, albumTracks]);
 
   async function search(type: SearchType, searchQuery: string, onFound: (found: SearchResultDto[]) => void) {
     const searchId = ++latestSearch.current;
@@ -217,7 +228,7 @@ export function DeezerPage() {
   const content = renderResults();
 
   return (
-    <ComposerStage raised={content !== null}>
+    <ComposerStage ref={stageRef} raised={content !== null}>
       <Composer
         value={query}
         onValueChange={setQuery}

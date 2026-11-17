@@ -7,7 +7,8 @@
   padding: 0.5rem 0.625rem 0.5rem 0.9375rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background-color: var(--surface);
+  background-color: var(--surface-glass);
+  backdrop-filter: blur(14px) saturate(1.4);
   transition: border-color var(--dur) var(--ease);
 }
 
@@ -84,6 +85,18 @@
 .stageRaised {
   justify-content: flex-start;
   padding: 5.5rem 0 4rem;
+}
+
+.stageRaised > .composer {
+  position: sticky;
+  top: calc(var(--view-sticky-top, 0px) + 0.75rem);
+  z-index: 10;
+  /* Hides the results in the gap above the stuck composer and around its corners. */
+  box-shadow: 0 calc(-0.75rem - var(--radius-lg)) 0 var(--bg);
+}
+
+.stageRaised > .composer ~ * * {
+  scroll-margin-top: calc(var(--view-sticky-top, 0px) + 6.5rem);
 }
 
 .stageBody {
