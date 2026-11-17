@@ -537,7 +537,7 @@ async function updateYtDlp(): Promise<void> {
   });
 }
 
-function buildMenu(): Menu {
+function buildMenu(): Electron.Menu {
   const settingsItem: MenuItemConstructorOptions = {
     label: 'Settings…',
     accelerator: 'CmdOrCtrl+,',
