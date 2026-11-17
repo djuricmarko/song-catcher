@@ -2,7 +2,7 @@
   "name": "@song-catcher/desktop",
   "productName": "Song Catcher",
   "desktopName": "song-catcher.desktop",
-  "version": "3.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Download music from Deezer and YouTube",

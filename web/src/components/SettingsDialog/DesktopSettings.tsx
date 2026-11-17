@@ -185,7 +185,7 @@ function SettingsForm({
               Cancel
             </Button>
             <Button
-              disabled={saving || (inDialog && changed.length === 0)}
+              disabled={saving || (inDialog && changed.length === 0 && !state.notice)}
               onClick={() => {
                 if (inDialog) {
                   setConfirming(true);
@@ -453,9 +453,11 @@ function SettingsForm({
           <AlertDialog.Popup className={styles.confirm}>
             <AlertDialog.Title className={styles.confirmTitle}>Reload Song Catcher?</AlertDialog.Title>
             <AlertDialog.Description className={styles.confirmText}>
-              {changed.includes('arl')
-                ? 'Song Catcher signs in to Deezer with the new ARL cookie once the download service restarts and the app reloads.'
-                : 'The new settings take effect once the download service restarts and the app reloads.'}
+              {changed.length === 0
+                ? 'Song Catcher signs in to Deezer again once the download service restarts and the app reloads.'
+                : changed.includes('arl')
+                  ? 'Song Catcher signs in to Deezer with the new ARL cookie once the download service restarts and the app reloads.'
+                  : 'The new settings take effect once the download service restarts and the app reloads.'}
               {activeDownloads > 0 ? ` ${pluralize(activeDownloads, 'download')} in progress will stop.` : ''}
             </AlertDialog.Description>
             <div className={styles.confirmActions}>

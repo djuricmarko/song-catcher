@@ -176,6 +176,20 @@ describe('SettingsDialog in the desktop app', () => {
     expect(within(dialog).getByText(/keep it private/)).toBeInTheDocument();
   });
 
+  it('retries a rejected login with the same ARL', async () => {
+    const state = makeSettingsState({ notice: 'Deezer did not accept the ARL cookie.' });
+    const { bridge, onOpenChange, dialog } = await renderDesktopDialog(state);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const prompt = await screen.findByRole('alertdialog', { name: 'Reload Song Catcher?' });
+    expect(prompt).toHaveTextContent('signs in to Deezer again');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Reload' }));
+    expect(bridge.save).toHaveBeenCalledWith(state.settings);
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   it('restores the defaults but keeps the ARL', async () => {
     const state = makeSettingsState();
     state.settings = { ...state.settings, workers: 9, theme: 'dark' };
