@@ -50,6 +50,7 @@ export interface DownloadedSong {
 }
 
 interface UserData {
+  loggedIn: boolean;
   licenseToken: string;
   quality: AccountQuality;
 }
@@ -147,6 +148,7 @@ export class DeezerClient {
 
     this.logger.info(
       {
+        loggedIn: userData.loggedIn,
         soundFormats: this.soundFormats,
         flacSupported: this.currentSoundFormat === 'FLAC',
       },
@@ -156,9 +158,13 @@ export class DeezerClient {
 
   public async testLogin(): Promise<boolean> {
     try {
-      const song = await this.getSongInfosFromWebsite('track', '917265');
-      this.logger.info({ songId: song.SNG_ID }, 'Deezer login is working');
-      return true;
+      const { loggedIn } = await this.getUserData();
+      if (loggedIn) {
+        this.logger.info('Deezer login is working');
+      } else {
+        this.logger.warn('Deezer did not accept the ARL cookie');
+      }
+      return loggedIn;
     } catch (error) {
       this.logger.warn({ err: error }, 'Deezer login check failed');
       return false;
@@ -177,7 +183,8 @@ export class DeezerClient {
       this.http.get(USER_DATA_URL).json<UserDataResponse>(),
     );
 
-    const options = body.results?.USER?.OPTIONS;
+    const user = body.results?.USER;
+    const options = user?.OPTIONS;
     const licenseToken = options?.license_token;
     const webSoundQuality = options?.web_sound_quality;
     if (!licenseToken || !webSoundQuality) {
@@ -185,6 +192,7 @@ export class DeezerClient {
     }
 
     return {
+      loggedIn: (user?.USER_ID ?? 0) > 0,
       licenseToken,
       quality: {
         lossless: webSoundQuality.lossless === true,

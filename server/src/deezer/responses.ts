@@ -10,6 +10,7 @@ export interface UserDataResponse {
   results?: {
     checkForm?: string;
     USER?: {
+      USER_ID?: number;
       OPTIONS?: {
         license_token?: string;
         web_hq?: boolean;

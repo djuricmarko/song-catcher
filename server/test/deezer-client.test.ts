@@ -123,6 +123,34 @@ describe('DeezerClient.init', () => {
   });
 });
 
+describe('DeezerClient.testLogin', () => {
+  function replyWithUser(user: object) {
+    nock('https://www.deezer.com')
+      .get('/ajax/gw-light.php')
+      .query(userDataUrl)
+      .reply(200, {
+        results: {
+          USER: { ...user, OPTIONS: { license_token: 'license', web_sound_quality: { standard: true } } },
+        },
+      });
+  }
+
+  it('accepts a session that belongs to a Deezer account', async () => {
+    replyWithUser({ USER_ID: 123456 });
+    await expect(makeClient().testLogin()).resolves.toBe(true);
+  });
+
+  it('rejects the anonymous session Deezer opens for an ARL it does not accept', async () => {
+    replyWithUser({ USER_ID: 0 });
+    await expect(makeClient().testLogin()).resolves.toBe(false);
+  });
+
+  it('reports a failed check as not logged in', async () => {
+    nock('https://www.deezer.com').get('/ajax/gw-light.php').query(userDataUrl).reply(500);
+    await expect(makeClient().testLogin()).resolves.toBe(false);
+  });
+});
+
 describe('DeezerClient search', () => {
   it('maps track search results', async () => {
     nock('https://api.deezer.com')
