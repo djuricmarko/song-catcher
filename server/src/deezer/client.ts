@@ -50,6 +50,7 @@ export interface DownloadedSong {
 }
 
 interface UserData {
+  userId: number;
   licenseToken: string;
   quality: AccountQuality;
 }
@@ -156,8 +157,12 @@ export class DeezerClient {
 
   public async testLogin(): Promise<boolean> {
     try {
-      const song = await this.getSongInfosFromWebsite('track', '917265');
-      this.logger.info({ songId: song.SNG_ID }, 'Deezer login is working');
+      const { userId } = await this.getUserData();
+      if (userId === 0) {
+        this.logger.warn('Deezer did not accept the ARL cookie and treats this session as logged out');
+        return false;
+      }
+      this.logger.info('Deezer login is working');
       return true;
     } catch (error) {
       this.logger.warn({ err: error }, 'Deezer login check failed');
@@ -185,6 +190,7 @@ export class DeezerClient {
     }
 
     return {
+      userId: Number(body.results?.USER?.USER_ID ?? 0),
       licenseToken,
       quality: {
         lossless: webSoundQuality.lossless === true,
