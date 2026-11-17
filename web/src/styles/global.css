@@ -8,6 +8,7 @@
   --bg-sunken: #fafafa;
   --surface: #f4f4f4;
   --surface-raised: #fff;
+  --surface-glass: rgb(240 240 240 / 0.72);
   --surface-hover: #ebebeb;
   --control: #e4e4e4;
   --line: #e6e6e6;
@@ -82,6 +83,7 @@
   --bg-sunken: #050505;
   --surface: #0e0e0e;
   --surface-raised: #050505;
+  --surface-glass: rgb(19 19 19 / 0.72);
   --surface-hover: #212121;
   --control: #292929;
   --line: #212121;

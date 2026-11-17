@@ -387,6 +387,44 @@ describe('DeezerPage album tracks', () => {
   });
 });
 
+describe('DeezerPage scrolling', () => {
+  it('starts every new list at the top and keeps the position otherwise', async () => {
+    const { searches, downloads } = mockSearch((body) =>
+      body.type === 'album_track'
+        ? [makeResult({ id: '100', title: 'Intro' })]
+        : [makeResult({ id_type: 'album', id: '5', album_id: '77', album: 'LP' })],
+    );
+    const { container } = renderWithProviders(<DeezerPage />);
+    await chooseMode('Album');
+    await search('x');
+    expect(await screen.findByText('1 found')).toBeInTheDocument();
+
+    container.scrollTop = 400;
+    await userEvent.click(await findRowButton('Get album LP'));
+    await waitFor(() => {
+      expect(downloads).toHaveLength(1);
+    });
+    expect(container.scrollTop).toBe(400);
+
+    await userEvent.click(await findRowButton('Tracks'));
+    expect(await screen.findByRole('heading', { name: 'LP' })).toBeInTheDocument();
+    expect(container.scrollTop).toBe(0);
+
+    container.scrollTop = 400;
+    await userEvent.click(screen.getByRole('button', { name: /Back to results/ }));
+    expect(container.scrollTop).toBe(0);
+
+    container.scrollTop = 400;
+    await search('y');
+    await waitFor(() => {
+      expect(searches).toHaveLength(3);
+    });
+    await waitFor(() => {
+      expect(container.scrollTop).toBe(0);
+    });
+  });
+});
+
 describe('DeezerPage artists', () => {
   it('loads top tracks and albums for an artist', async () => {
     const { searches } = mockSearch((body) =>

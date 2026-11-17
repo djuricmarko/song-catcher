@@ -18,6 +18,7 @@
 }
 
 :global(.desktop) .view {
+  --view-sticky-top: 0px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -91,6 +92,7 @@
 }
 
 .view {
+  --view-sticky-top: var(--header-height);
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
