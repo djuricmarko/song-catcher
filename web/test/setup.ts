@@ -15,5 +15,6 @@ afterEach(() => {
   MockEventSource.instances = [];
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  delete window.songCatcherApp;
   document.documentElement.removeAttribute('data-theme');
 });

@@ -4,9 +4,10 @@ import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 
-import type { QueueTask, SearchResultDto } from '@song-catcher/shared';
+import type { DesktopSettingsState, QueueTask, SearchResultDto } from '@song-catcher/shared';
 
 import { QueueProvider } from '../src/hooks/useQueue';
+import type { DesktopApp } from '../src/lib/desktop';
 
 type MediaListener = (event: MediaQueryListEvent) => void;
 
@@ -184,4 +185,46 @@ export function makeResult(overrides: Partial<SearchResultDto> = {}): SearchResu
     preview_url: '',
     ...overrides,
   };
+}
+
+export function makeSettingsState(overrides: Partial<DesktopSettingsState> = {}): DesktopSettingsState {
+  const defaults: DesktopSettingsState['defaults'] = {
+    arl: '',
+    quality: 'mp3',
+    downloadDir: '/music/Song Catcher',
+    proxyUrl: '',
+    workers: 4,
+    youtubePlaylistMax: 500,
+    mpdEnabled: false,
+    mpdHost: 'localhost',
+    mpdPort: 6600,
+    mpdMusicDir: '',
+    theme: 'system',
+  };
+  return {
+    settings: { ...defaults, arl: 'old-arl' },
+    defaults,
+    notice: undefined,
+    tools: { 'yt-dlp': true, ffmpeg: true, metaflac: true },
+    secretsEncrypted: true,
+    version: '3.1.0',
+    ...overrides,
+  };
+}
+
+/** Installs the bridge the desktop app's preload exposes to the page; the test setup removes it again. */
+export function installDesktopApp(overrides: Partial<DesktopApp> = {}): DesktopApp {
+  const app: DesktopApp = {
+    platform: 'linux',
+    settings: {
+      load: vi.fn(async () => makeSettingsState()),
+      save: vi.fn(async () => ({ ok: true as const })),
+      chooseDirectory: vi.fn(async () => undefined),
+      setTheme: vi.fn(),
+    },
+    onOpenSettings: vi.fn(() => () => undefined),
+    ...overrides,
+  };
+  window.songCatcherApp = app;
+  return app;
 }

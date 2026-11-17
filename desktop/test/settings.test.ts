@@ -5,6 +5,7 @@ import {
   AUTH_USER,
   defaultSettings,
   mergeSettings,
+  needsRestart,
   serverEnvironment,
   settingsIssues,
   settingsSchema,
@@ -56,6 +57,18 @@ describe('settingsSchema', () => {
 
   it('accepts a socks proxy', () => {
     expect(settingsSchema.safeParse({ ...defaults, proxyUrl: 'socks5h://127.0.0.1:9050' }).success).toBe(true);
+  });
+});
+
+describe('needsRestart', () => {
+  it('restarts the download service for anything it reads', () => {
+    expect(needsRestart(defaults, { ...defaults, arl: 'fresh' })).toBe(true);
+    expect(needsRestart(defaults, { ...defaults, workers: 8 })).toBe(true);
+  });
+
+  it('leaves it running for the theme or no change', () => {
+    expect(needsRestart(defaults, { ...defaults, theme: 'dark' })).toBe(false);
+    expect(needsRestart(defaults, { ...defaults })).toBe(false);
   });
 });
 

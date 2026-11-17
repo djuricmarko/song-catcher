@@ -24,7 +24,7 @@
 }
 
 .positioner {
-  z-index: 50;
+  z-index: 80;
 }
 
 .popup {
@@ -59,5 +59,40 @@
 }
 
 .item[data-selected] {
+  color: var(--ink);
+}
+
+.trigger.field {
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 9rem;
+  height: 2rem;
+  padding: 0 0.625rem 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.trigger.field:hover,
+.trigger.field[data-popup-open] {
+  border-color: var(--line-strong);
+}
+
+.popup.field {
+  min-width: var(--anchor-width);
+  border-radius: var(--radius-md);
+}
+
+.popup.field .item {
+  height: 1.875rem;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.popup.field .item[data-highlighted],
+.popup.field .item[data-selected] {
   color: var(--ink);
 }

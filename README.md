@@ -24,8 +24,9 @@ npm run desktop        # build everything and start the app from source
 npm run desktop:dist   # build an installer for the platform you are on, into desktop/release/
 ```
 
-- The first launch opens the settings window (**File → Settings…**, `Ctrl+,`) and asks for your
-  [ARL cookie](#getting-your-arl-cookie).
+- The first launch asks for your [ARL cookie](#getting-your-arl-cookie). After that the settings open from the
+  gear in the sidebar or **File → Settings…** (`Ctrl+,`); saving a new ARL or download setting asks to reload
+  the app, which restarts the download service.
 - Downloads go to `Music/Song Catcher` in your home folder unless you choose another folder.
 - **File → Update yt-dlp** downloads the latest yt-dlp when YouTube downloads start failing.
 - FLAC needs `metaflac` (from the `flac` package) installed on the computer.
@@ -76,7 +77,7 @@ set `DEEZER_AUTH_USER` and `DEEZER_AUTH_PASSWORD`, or put the app behind an auth
 ## Configuration
 
 The web app is configured with environment variables. [`.env.example`](.env.example) is a documented starting
-point. The desktop app uses its settings window instead.
+point. The desktop app keeps these in its settings instead.
 
 | Variable                      | Default                  | Description                                                               |
 | ----------------------------- | ------------------------ | ------------------------------------------------------------------------- |
@@ -104,8 +105,8 @@ point. The desktop app uses its settings window instead.
 | `DEEZER_FFMPEG_PATH`          | `ffmpeg`                 | ffmpeg executable name or absolute path.                                  |
 | `DEEZER_METAFLAC_PATH`        | `metaflac`               | metaflac executable name or absolute path.                                |
 | `DEEZER_LOG_LEVEL`            | `info`                   | `fatal`, `error`, `warn`, `info`, `debug` or `trace`.                     |
-| `DEEZER_LOG_FILE`             | empty                    | If set, logs are also written to this file and shown on the Logs page.    |
-| `DEEZER_DEBUG_COMMAND`        | empty                    | Shell command whose output the Logs page shows instead of the log file.   |
+| `DEEZER_LOG_FILE`             | empty                    | If set, logs are also written to this file and shown in the Logs dialog.  |
+| `DEEZER_DEBUG_COMMAND`        | empty                    | Shell command whose output the Logs dialog shows instead of the log file. |
 
 ## Development
 
