@@ -469,7 +469,7 @@ function registerSettingsIpc(): void {
       return { ok: false, message: 'Enter your Deezer ARL cookie.' };
     }
 
-    const restart = !server.running || needsRestart(settings, parsed.data);
+    const restart = !server.running || settingsNotice !== undefined || needsRestart(settings, parsed.data);
     settings = parsed.data;
     nativeTheme.themeSource = settings.theme;
     await saveSettings(settingsFile, settings);
