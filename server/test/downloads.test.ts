@@ -547,7 +547,7 @@ printf '%s\\n' "$directory/$name.mp3"
     });
 
     expect(media).toEqual([{ title: 'Road: Trip', subtitle: '2 songs' }]);
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Road Trip');
+    const directory = path.join(baseDirectory, 'youtube', 'Road Trip');
     expect(files).toEqual([
       path.join(directory, 'one.mp3'),
       path.join(directory, 'two.mp3'),
@@ -572,7 +572,7 @@ printf '%s\\n' "$directory/$name.mp3"
     await downloads.downloadYoutubePlaylist('https://example.com/list', false);
     expect(await downloadCalls()).toHaveLength(2);
 
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Again');
+    const directory = path.join(baseDirectory, 'youtube', 'Again');
     await rm(path.join(directory, 'two.mp3'));
     await setPlaylist('Again', ['one', 'two', 'three']);
     const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false);
@@ -589,7 +589,7 @@ printf '%s\\n' "$directory/$name.mp3"
 
   it('ignores a damaged or tampered manifest', async () => {
     await setPlaylist('Damaged', ['one', 'two']);
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Damaged');
+    const directory = path.join(baseDirectory, 'youtube', 'Damaged');
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(baseDirectory, 'outside.mp3'), 'secret');
     const downloads = makeDownloads();
@@ -640,7 +640,7 @@ printf '%s\\n' "$directory/$name.mp3"
 
     const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false);
 
-    expect(files[0]).toBe(path.join(baseDirectory, 'youtube-dl', '100% hits', 'one.mp3'));
+    expect(files[0]).toBe(path.join(baseDirectory, 'youtube', '100% hits', 'one.mp3'));
   });
 
   it('fails when the playlist is empty or nothing could be downloaded', async () => {
@@ -655,6 +655,6 @@ printf '%s\\n' "$directory/$name.mp3"
     await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false)).rejects.toBeInstanceOf(
       DownloadError,
     );
-    await expect(readdir(path.join(baseDirectory, 'youtube-dl', 'Dead'))).resolves.toEqual([]);
+    await expect(readdir(path.join(baseDirectory, 'youtube', 'Dead'))).resolves.toEqual([]);
   });
 });
