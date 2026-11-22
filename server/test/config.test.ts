@@ -37,7 +37,7 @@ describe('loadConfig defaults', () => {
       songsDir: '/tmp/deezer-downloader/songs',
       albumsDir: '/tmp/deezer-downloader/albums',
       playlistsDir: '/tmp/deezer-downloader/playlists',
-      youtubeDir: '/tmp/deezer-downloader/youtube-dl',
+      youtubeDir: '/tmp/deezer-downloader/youtube',
     });
     expect(config.queue).toEqual({ workers: 4, historyLimit: 500 });
     expect(config.youtube).toEqual({ playlistMaxEntries: 500 });
@@ -84,7 +84,7 @@ describe('loadConfig defaults', () => {
 
     expect(config.downloads.baseDir).toBe('/srv/music/deezer');
     expect(config.downloads.songsDir).toBe('/srv/music/deezer/songs');
-    expect(config.downloads.youtubeDir).toBe('/srv/music/deezer/youtube-dl');
+    expect(config.downloads.youtubeDir).toBe('/srv/music/deezer/youtube');
   });
 
   it('honors explicit download subdirectory overrides', () => {

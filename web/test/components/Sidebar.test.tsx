@@ -107,7 +107,7 @@ describe('Sidebar queue', () => {
         title: 'Pantera - Walk (Official Music Video)',
         date: '2009-10-03',
         state: 'mission accomplished',
-        result: ['/music/youtube-dl/Pantera - Walk.mp3'],
+        result: ['/music/youtube/Pantera - Walk.mp3'],
         sizeBytes: 49 * 1024 * 1024,
         speedBps: 7_787_500,
       }),
