@@ -16,8 +16,10 @@ import {
   parseYtDlpInfo,
   parseYtDlpOutput,
   parseYtDlpPlaylist,
+  parseYtDlpTransfer,
   type YoutubeVideoInfo,
 } from '../src/downloads/youtube.js';
+import type { TransferReporter, TransferSample } from '../src/lib/transfer.js';
 
 const ARL = 'a'.repeat(192);
 const logger = pino({ level: 'silent' });
@@ -58,7 +60,7 @@ afterEach(async () => {
 });
 
 function makeService(overrides: Partial<DeezerService> = {}) {
-  const downloadSong = vi.fn(async (_song: DeezerSong, outputFile: string) => {
+  const downloadSong = vi.fn(async (_song: DeezerSong, outputFile: string, _onTransfer?: TransferReporter) => {
     await writeFile(outputFile, 'audio');
     return { format: 'MP3_128' as const, extension: 'mp3' as const };
   });
@@ -93,15 +95,18 @@ describe('DownloadService', () => {
   });
 
   it('downloads a single track into the songs directory', async () => {
-    const { service } = makeService();
+    const { service, downloadSong } = makeService();
     const downloads = new DownloadService(config, service, logger);
 
     const media: Array<Partial<TaskMedia>> = [];
+    const reportTransfer = vi.fn();
     const files = await downloads.downloadTrack('1', false, {
       reportMedia: (reported) => media.push(reported),
+      reportTransfer,
     });
 
     expect(media).toEqual([{ title: 'Artist - Song', subtitle: 'Album' }]);
+    expect(downloadSong.mock.calls[0]?.[2]).toBe(reportTransfer);
     expect(files).toHaveLength(1);
     expect(files[0]).toBe(path.join(baseDirectory, 'songs', 'Artist - Song.mp3'));
     expect(await readFile(files[0]!, 'utf8')).toBe('audio');
@@ -219,6 +224,14 @@ describe('yt-dlp wrapper', () => {
     expect(parseYtDlpInfo('{"upload_date": "20091003"}')).toBeUndefined();
   });
 
+  it('reads the downloaded bytes from the progress line', () => {
+    expect(parseYtDlpTransfer('[transfer] 1024 252182')).toEqual({ transferred: 1024, total: 252182 });
+    expect(parseYtDlpTransfer('[transfer] 1024 5000.5')).toEqual({ transferred: 1024, total: 5000.5 });
+    expect(parseYtDlpTransfer('[transfer] 1024 NA')).toEqual({ transferred: 1024, total: undefined });
+    expect(parseYtDlpTransfer('[transfer] NA NA')).toBeUndefined();
+    expect(parseYtDlpTransfer('/tmp/video.mp3')).toBeUndefined();
+  });
+
   it('downloads through an executable', async () => {
     const scriptPath = path.join(baseDirectory, 'fake-ytdlp.sh');
     await writeFile(
@@ -233,6 +246,8 @@ while [ $# -gt 0 ]; do
 done
 out=$(printf '%s' "$out" | sed 's/%(title)s.%(ext)s/video.mp3/')
 printf '%s\\n' '{"title": "Video", "upload_date": "20240930"}'
+printf '%s\\n' '[transfer] 1024 5120' '[transfer] 5120 5120' '[transfer] 5120 5120'
+printf '%s\\n' '[convert] ExtractAudio' >&2
 printf 'audio' > "$out"
 printf '%s\\n' "$out"
 `,
@@ -243,14 +258,20 @@ printf '%s\\n' "$out"
     await mkdir(directory, { recursive: true });
 
     const infos: YoutubeVideoInfo[] = [];
+    const samples: TransferSample[] = [];
     const filename = await downloadWithYtDlp({
       url: 'https://example.com/video',
       destinationDirectory: directory,
       executable: scriptPath,
       onInfo: (info) => infos.push(info),
+      onTransfer: (sample) => samples.push(sample),
     });
 
     expect(infos).toEqual([{ title: 'Video', uploadDate: '2024-09-30' }]);
+    expect(samples.reduce((total, sample) => total + sample.bytes, 0)).toBe(4096);
+    const fractions = samples.map((sample) => sample.fraction);
+    expect(fractions.filter((fraction) => fraction !== null)).toEqual([0.2, 1, 1]);
+    expect(fractions).toContain(null);
     expect(filename).toBe(path.join(directory, 'video.mp3'));
     expect(await readFile(filename, 'utf8')).toBe('audio');
   });
@@ -526,7 +547,7 @@ printf '%s\\n' "$directory/$name.mp3"
     });
 
     expect(media).toEqual([{ title: 'Road: Trip', subtitle: '2 songs' }]);
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Road Trip');
+    const directory = path.join(baseDirectory, 'youtube', 'Road Trip');
     expect(files).toEqual([
       path.join(directory, 'one.mp3'),
       path.join(directory, 'two.mp3'),
@@ -551,7 +572,7 @@ printf '%s\\n' "$directory/$name.mp3"
     await downloads.downloadYoutubePlaylist('https://example.com/list', false);
     expect(await downloadCalls()).toHaveLength(2);
 
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Again');
+    const directory = path.join(baseDirectory, 'youtube', 'Again');
     await rm(path.join(directory, 'two.mp3'));
     await setPlaylist('Again', ['one', 'two', 'three']);
     const files = await downloads.downloadYoutubePlaylist('https://example.com/list', false);
@@ -568,7 +589,7 @@ printf '%s\\n' "$directory/$name.mp3"
 
   it('ignores a damaged or tampered manifest', async () => {
     await setPlaylist('Damaged', ['one', 'two']);
-    const directory = path.join(baseDirectory, 'youtube-dl', 'Damaged');
+    const directory = path.join(baseDirectory, 'youtube', 'Damaged');
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(baseDirectory, 'outside.mp3'), 'secret');
     const downloads = makeDownloads();
@@ -619,7 +640,7 @@ printf '%s\\n' "$directory/$name.mp3"
 
     const files = await makeDownloads().downloadYoutubePlaylist('https://example.com/list', false);
 
-    expect(files[0]).toBe(path.join(baseDirectory, 'youtube-dl', '100% hits', 'one.mp3'));
+    expect(files[0]).toBe(path.join(baseDirectory, 'youtube', '100% hits', 'one.mp3'));
   });
 
   it('fails when the playlist is empty or nothing could be downloaded', async () => {
@@ -634,6 +655,6 @@ printf '%s\\n' "$directory/$name.mp3"
     await expect(downloads.downloadYoutubePlaylist('https://example.com/list', false)).rejects.toBeInstanceOf(
       DownloadError,
     );
-    await expect(readdir(path.join(baseDirectory, 'youtube-dl', 'Dead'))).resolves.toEqual([]);
+    await expect(readdir(path.join(baseDirectory, 'youtube', 'Dead'))).resolves.toEqual([]);
   });
 });

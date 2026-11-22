@@ -3,9 +3,11 @@ import type { Logger } from 'pino';
 
 import { errorMessage } from '../lib/errors.js';
 import { totalFileSize } from '../lib/files.js';
+import type { TransferReporter } from '../lib/transfer.js';
 
 export interface TaskContext {
   reportProgress: (current: number, maximum: number) => void;
+  reportTransfer: TransferReporter;
   reportWarning: (message: string) => void;
   reportMedia: (media: Partial<TaskMedia>) => void;
 }
@@ -113,6 +115,8 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       subtitle: label.subtitle ?? null,
       date: null,
       sizeBytes: 0,
+      speedBps: null,
+      fileProgress: null,
       handlerName,
       args: { ...args },
       state: 'waiting',
@@ -184,6 +188,9 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
 
       this.notify(task);
 
+      const transferred = { bytes: 0, ms: 0 };
+      const recent = { bytes: 0, ms: 0 };
+      let unnotifiedMs = 0;
       const handler = this.handlers.get(task.handlerName);
       try {
         if (!handler) {
@@ -193,6 +200,25 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
           reportProgress: (current, maximum) => {
             task.progress = [current, maximum];
             this.notify(task);
+          },
+          reportTransfer: ({ bytes, elapsedMs, fraction }) => {
+            transferred.bytes += bytes;
+            transferred.ms += elapsedMs;
+            recent.bytes += bytes;
+            recent.ms += elapsedMs;
+            unnotifiedMs += elapsedMs;
+            if (recent.ms >= 500) {
+              task.speedBps = (recent.bytes * 1000) / recent.ms;
+              recent.bytes = 0;
+              recent.ms = 0;
+            }
+            const phaseChanged =
+              (fraction === null) !== (task.fileProgress === null) || (fraction === 1 && task.fileProgress !== 1);
+            task.fileProgress = fraction;
+            if (phaseChanged || unnotifiedMs >= 250) {
+              unnotifiedMs = 0;
+              this.notify(task);
+            }
           },
           reportWarning: (message) => {
             task.warnings.push(message);
@@ -210,6 +236,8 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
         task.exception = errorMessage(error);
         this.logger.error({ err: error, taskId: task.id, handler: task.handlerName }, 'download task failed');
       } finally {
+        task.speedBps =
+          transferred.bytes > 0 && transferred.ms > 0 ? (transferred.bytes * 1000) / transferred.ms : null;
         task.tsFinished = Date.now();
         this.notify(task);
         this.trimHistory();
@@ -253,6 +281,8 @@ export class Scheduler<Tasks extends TaskArgsMap = TaskArgsMap> {
       subtitle: task.subtitle,
       date: task.date,
       sizeBytes: task.sizeBytes,
+      speedBps: task.speedBps,
+      fileProgress: task.fileProgress,
       args: { ...task.args },
       state: task.state,
       result: task.result ? [...task.result] : null,

@@ -8,6 +8,7 @@ import {
   Database,
   DiscAlbum,
   File,
+  Gauge,
   ListMusic,
   LoaderCircle,
   TriangleAlert,
@@ -18,7 +19,7 @@ import {
 import type { QueueTask, TaskKind } from '@song-catcher/shared';
 
 import { cn } from '../../lib/cn';
-import { formatClockTime, formatDate, formatFileSize, pluralize } from '../../lib/format';
+import { formatBitRate, formatClockTime, formatDate, formatFileSize, pluralize } from '../../lib/format';
 import { fileExtension } from '../../lib/paths';
 import { SourceLabel } from '../SourceLogo';
 
@@ -30,9 +31,10 @@ function StateMark({ task }: { task: QueueTask }) {
   switch (task.state) {
     case 'active': {
       const [current, maximum] = task.progress;
+      const fraction = maximum > 1 ? current / maximum : task.fileProgress;
       return (
         <span className={styles.state}>
-          {maximum > 1 ? (
+          {fraction !== null ? (
             <svg
               className={styles.ring}
               viewBox="0 0 24 24"
@@ -49,7 +51,7 @@ function StateMark({ task }: { task: QueueTask }) {
                 cy={12}
                 r={10}
                 pathLength={100}
-                strokeDasharray={`${Math.min(100, (current / maximum) * 100)} 100`}
+                strokeDasharray={`${Math.min(100, fraction * 100)} 100`}
                 strokeLinecap="round"
               />
             </svg>
@@ -105,6 +107,7 @@ function Details({ task }: { task: QueueTask }) {
       <Detail icon={Wrench}>{task.source === 'youtube' ? 'yt-dlp' : 'Deezer'}</Detail>
       {extensions.length > 0 ? <Detail icon={File}>{extensions.join(', ')}</Detail> : null}
       {task.sizeBytes > 0 ? <Detail icon={Database}>{formatFileSize(task.sizeBytes)}</Detail> : null}
+      {task.speedBps ? <Detail icon={Gauge}>{formatBitRate(task.speedBps)}</Detail> : null}
       {maximum > 1 ? <Detail icon={ListMusic}>{`${current} of ${pluralize(maximum, 'song')}`}</Detail> : null}
       {task.warnings.length > 0 ? (
         <Detail icon={TriangleAlert}>{`${pluralize(task.warnings.length, 'song')} skipped`}</Detail>

@@ -17,6 +17,17 @@ export function formatFileSize(bytes: number): string {
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${SIZE_UNITS[unit] ?? ''}`;
 }
 
+export function formatBitRate(bytesPerSecond: number): string {
+  const units = ['bps', 'Kbps', 'Mbps', 'Gbps'];
+  let value = bytesPerSecond * 8;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit] ?? ''}`;
+}
+
 export function formatClockTime(timestamp: number): string {
   if (!timestamp) {
     return '--:--';

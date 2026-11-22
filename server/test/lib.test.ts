@@ -2,12 +2,13 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { childEnvironment, childStderr, wasKilled } from '../src/lib/child-process.js';
 import { errorMessage } from '../src/lib/errors.js';
 import { isNonEmptyFile, removeQuietly, temporaryPathFor } from '../src/lib/files.js';
 import { toPosixPath } from '../src/lib/paths.js';
+import { cumulativeTransfer, type TransferSample } from '../src/lib/transfer.js';
 
 describe('errorMessage', () => {
   it('uses the message of an Error and the string form of anything else', () => {
@@ -52,6 +53,36 @@ describe('child process helpers', () => {
     expect(wasKilled(Object.assign(new Error('exit 1'), { killed: false }))).toBe(false);
     expect(wasKilled(new Error('exit 1'))).toBe(false);
     expect(wasKilled(null)).toBe(false);
+  });
+});
+
+describe('cumulativeTransfer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports the bytes, time and fraction between cumulative totals and restarts when the total drops', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const reports: TransferSample[] = [];
+    const track = cumulativeTransfer((sample) => reports.push(sample));
+
+    track(0, 8000);
+    vi.advanceTimersByTime(100);
+    track(4000, 8000);
+    vi.advanceTimersByTime(50);
+    track(6000, 8000);
+    vi.advanceTimersByTime(1000);
+    track(1000);
+    vi.advanceTimersByTime(20);
+    track(3000);
+
+    expect(reports).toEqual([
+      { bytes: 0, elapsedMs: 0, fraction: 0 },
+      { bytes: 4000, elapsedMs: 100, fraction: 0.5 },
+      { bytes: 2000, elapsedMs: 50, fraction: 0.75 },
+      { bytes: 0, elapsedMs: 0, fraction: null },
+      { bytes: 2000, elapsedMs: 20, fraction: null },
+    ]);
   });
 });
 

@@ -8,6 +8,7 @@ import { CookieJar } from 'tough-cookie';
 
 import type { AppConfig } from '../config/env.js';
 import { errorMessage } from '../lib/errors.js';
+import { cumulativeTransfer, type TransferReporter } from '../lib/transfer.js';
 import { calcBfKey, createDecryptTransform } from './crypto.js';
 import { Deezer403Exception, Deezer404Exception, DeezerApiException, isSessionError } from './errors.js';
 import {
@@ -465,11 +466,15 @@ export class DeezerClient {
     return { url, format: media.format };
   }
 
-  public async downloadSong(song: DeezerSong, outputFile: string): Promise<DownloadedSong> {
+  public async downloadSong(
+    song: DeezerSong,
+    outputFile: string,
+    onTransfer?: TransferReporter,
+  ): Promise<DownloadedSong> {
     const { song: resolvedSong, source } = await this.resolveSource(song);
     const songId = resolvedSong.SNG_ID;
 
-    await this.streamToFile(resolvedSong, source, outputFile);
+    await this.streamToFile(resolvedSong, source, outputFile, onTransfer);
     await this.tagSong(resolvedSong, source.format, outputFile);
 
     if (source.format !== this.currentSoundFormat) {
@@ -494,10 +499,22 @@ export class DeezerClient {
     }
   }
 
-  private async streamToFile(song: DeezerSong, source: SongSource, outputFile: string): Promise<void> {
+  private async streamToFile(
+    song: DeezerSong,
+    source: SongSource,
+    outputFile: string,
+    onTransfer?: TransferReporter,
+  ): Promise<void> {
     const key = calcBfKey(song.SNG_ID);
+    const download = this.http.stream(source.url);
+    if (onTransfer) {
+      const track = cumulativeTransfer(onTransfer);
+      download.on('downloadProgress', ({ transferred, total }: { transferred: number; total?: number }) => {
+        track(transferred, total);
+      });
+    }
     try {
-      await pipeline(this.http.stream(source.url), createDecryptTransform(key), createWriteStream(outputFile));
+      await pipeline(download, createDecryptTransform(key), createWriteStream(outputFile));
     } catch (error) {
       await rm(outputFile, { force: true }).catch(() => undefined);
       throw new DeezerApiException(

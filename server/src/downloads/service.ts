@@ -9,6 +9,7 @@ import type { DeezerClient } from '../deezer/client.js';
 import type { DeezerSong } from '../deezer/types.js';
 import { errorMessage } from '../lib/errors.js';
 import { isNonEmptyFile, removeQuietly, temporaryPathFor } from '../lib/files.js';
+import type { TransferReporter } from '../lib/transfer.js';
 import { syncWithMpd } from './mpd-sync.js';
 import { buildSongFilename, cleanFilename, songDirectory, type SongPathType } from './paths.js';
 import { readPlaylistManifest, writePlaylistManifest, type PlaylistManifest } from './playlist-manifest.js';
@@ -21,6 +22,7 @@ export type DeezerService = Pick<
 
 export interface DownloadReporters {
   reportProgress?: (current: number, maximum: number) => void;
+  reportTransfer?: TransferReporter;
   reportWarning?: (message: string) => void;
   reportMedia?: (media: Partial<TaskMedia>) => void;
 }
@@ -66,7 +68,7 @@ export class DownloadService {
       title: [song.ART_NAME, song.SNG_TITLE].filter(Boolean).join(' - ') || `Track ${trackId}`,
       subtitle: song.ALB_TITLE || null,
     });
-    const filename = await this.downloadSongToDisk('track', song);
+    const filename = await this.downloadSongToDisk('track', song, reporters);
     reporters.reportProgress?.(1, 1);
     await this.updateMpd([filename], addToPlaylist);
     return [filename];
@@ -88,7 +90,7 @@ export class DownloadService {
 
     const files = await this.downloadBatch({
       items: songs,
-      download: (song) => this.downloadSongToDisk('album', song),
+      download: (song) => this.downloadSongToDisk('album', song, reporters),
       describe: songLabel,
       logFailure: (song, error) => {
         this.logger.warn({ err: error, albumId, songId: song.SNG_ID }, 'could not download album song; continuing');
@@ -116,7 +118,7 @@ export class DownloadService {
 
     const files = await this.downloadBatch({
       items: playlist.songs,
-      download: (song) => this.downloadSongToDisk('playlist', song, playlist.name),
+      download: (song) => this.downloadSongToDisk('playlist', song, reporters, playlist.name),
       describe: songLabel,
       logFailure: (song, error) => {
         this.logger.warn(
@@ -133,7 +135,12 @@ export class DownloadService {
     return this.finishPlaylist(files, addToPlaylist);
   }
 
-  public async downloadSongToDisk(searchType: SongPathType, song: DeezerSong, playlistName?: string): Promise<string> {
+  public async downloadSongToDisk(
+    searchType: SongPathType,
+    song: DeezerSong,
+    reporters: DownloadReporters = {},
+    playlistName?: string,
+  ): Promise<string> {
     const directory = songDirectory(this.config.downloads, searchType, song, playlistName);
     await mkdir(directory, { recursive: true });
 
@@ -148,7 +155,7 @@ export class DownloadService {
     this.logger.info({ file: absoluteFilename, songId: song.SNG_ID }, 'downloading song');
     const temporaryFilename = temporaryPathFor(absoluteFilename);
     try {
-      const { extension } = await this.deezer.downloadSong(song, temporaryFilename);
+      const { extension } = await this.deezer.downloadSong(song, temporaryFilename, reporters.reportTransfer);
       const finalFilename =
         extension === preferredExtension
           ? absoluteFilename
@@ -166,7 +173,7 @@ export class DownloadService {
     addToPlaylist: boolean,
     reporters: DownloadReporters = {},
   ): Promise<string[]> {
-    const filename = await this.downloadWithYtDlp(url, this.config.downloads.youtubeDir, (info) => {
+    const filename = await this.downloadWithYtDlp(url, this.config.downloads.youtubeDir, reporters, (info) => {
       reporters.reportMedia?.({ title: info.title, date: info.uploadDate ?? null });
     });
     await this.updateMpd([filename], addToPlaylist);
@@ -201,7 +208,7 @@ export class DownloadService {
 
     const downloaded = await this.downloadBatch({
       items: playlist.entries,
-      download: (entry) => this.downloadPlaylistEntry(entry, directory, manifest),
+      download: (entry) => this.downloadPlaylistEntry(entry, directory, manifest, reporters),
       describe: (entry) => `"${entry.title}"`,
       logFailure: (entry, error) => {
         this.logger.warn(
@@ -222,6 +229,7 @@ export class DownloadService {
     entry: YoutubePlaylistEntry,
     directory: string,
     manifest: PlaylistManifest,
+    reporters: DownloadReporters,
   ): Promise<string> {
     const knownFilename = manifest[entry.id];
     if (knownFilename) {
@@ -232,7 +240,7 @@ export class DownloadService {
       }
     }
 
-    const filename = await this.downloadWithYtDlp(entry.url, directory);
+    const filename = await this.downloadWithYtDlp(entry.url, directory, reporters);
     if (path.dirname(filename) === directory) {
       manifest[entry.id] = path.basename(filename);
       await writePlaylistManifest(directory, manifest).catch((error: unknown) => {
@@ -245,12 +253,14 @@ export class DownloadService {
   private downloadWithYtDlp(
     url: string,
     destinationDirectory: string,
+    reporters: DownloadReporters,
     onInfo?: (info: YoutubeVideoInfo) => void,
   ): Promise<string> {
     return downloadWithYtDlp({
       url,
       destinationDirectory,
       onInfo,
+      onTransfer: reporters.reportTransfer,
       executable: this.config.tools.ytdlpPath,
       ffmpegPath: this.config.tools.ffmpegPath,
       proxyUrl: this.config.deezer.proxyUrl,

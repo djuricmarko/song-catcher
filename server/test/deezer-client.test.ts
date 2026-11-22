@@ -11,6 +11,7 @@ import { loadConfig } from '../src/config/env.js';
 import { DeezerClient, isDeezerShortLink } from '../src/deezer/client.js';
 import { Deezer403Exception, Deezer404Exception } from '../src/deezer/errors.js';
 import type { DeezerSong } from '../src/deezer/types.js';
+import type { TransferSample } from '../src/lib/transfer.js';
 
 const ARL = 'a'.repeat(192);
 const logger = pino({ level: 'silent' });
@@ -434,6 +435,20 @@ describe('DeezerClient.downloadSong', () => {
     expect(tags.title).toBe('Title');
     expect(tags.artist).toBe('Artist');
     expect(tags.image).toBeFalsy();
+  });
+
+  it('reports the downloaded bytes', async () => {
+    mockInit();
+    mockSong(1);
+    nock('https://e-cdns-images.dzcdn.net').get('/images/cover/pic/1200x1200.jpg').reply(500);
+
+    const client = makeMp3Client();
+    await client.init();
+    const samples: TransferSample[] = [];
+    await client.downloadSong(downloadable, path.join(directory, 'song.mp3'), (sample) => samples.push(sample));
+
+    expect(samples.reduce((total, sample) => total + sample.bytes, 0)).toBe('audio'.length);
+    expect(samples.at(-1)?.fraction).toBe(1);
   });
 
   it('downloads a shared album cover only once', async () => {

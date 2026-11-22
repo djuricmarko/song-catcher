@@ -95,7 +95,7 @@ point. The desktop app keeps these in its settings instead.
 | `DEEZER_SONGS_DIR`            | `${base}/songs`          | Track directory.                                                          |
 | `DEEZER_ALBUMS_DIR`           | `${base}/albums`         | Album directory.                                                          |
 | `DEEZER_PLAYLISTS_DIR`        | `${base}/playlists`      | Playlist directory.                                                       |
-| `DEEZER_YOUTUBE_DIR`          | `${base}/youtube-dl`     | YouTube download directory.                                               |
+| `DEEZER_YOUTUBE_DIR`          | `${base}/youtube`        | YouTube download directory.                                               |
 | `DEEZER_YOUTUBE_PLAYLIST_MAX` | `500`                    | Maximum number of songs taken from one YouTube playlist (1–10000).        |
 | `DEEZER_MPD_ENABLED`          | `false`                  | Enable MPD integration.                                                   |
 | `DEEZER_MPD_HOST`             | `localhost`              | MPD host.                                                                 |
