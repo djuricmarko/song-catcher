@@ -208,7 +208,7 @@ function resolveDownloadDirectories(raw: RawEnv, cwd: string): AppConfig['downlo
     songsDir: subdirectory(raw.DEEZER_SONGS_DIR, 'songs'),
     albumsDir: subdirectory(raw.DEEZER_ALBUMS_DIR, 'albums'),
     playlistsDir: subdirectory(raw.DEEZER_PLAYLISTS_DIR, 'playlists'),
-    youtubeDir: subdirectory(raw.DEEZER_YOUTUBE_DIR, 'youtube-dl'),
+    youtubeDir: subdirectory(raw.DEEZER_YOUTUBE_DIR, 'youtube'),
   };
 }
 

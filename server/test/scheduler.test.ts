@@ -170,6 +170,54 @@ describe('Scheduler', () => {
     await scheduler.stop();
   });
 
+  it('reports a live transfer speed and keeps the average when finished', async () => {
+    const scheduler = new Scheduler(1, 10, logger);
+    const live: Array<[number | null, number | null]> = [];
+    scheduler.register('transfer', async (_args, context) => {
+      context.reportTransfer({ bytes: 0, elapsedMs: 0, fraction: 0 });
+      context.reportTransfer({ bytes: 1_000_000, elapsedMs: 100, fraction: 0.4 });
+      context.reportTransfer({ bytes: 1_000_000, elapsedMs: 400, fraction: 0.8 });
+      context.reportTransfer({ bytes: 500_000, elapsedMs: 500, fraction: 1 });
+      context.reportTransfer({ bytes: 0, elapsedMs: 0, fraction: null });
+      return [];
+    });
+    scheduler.subscribe((task) => {
+      if (task.state === 'active') {
+        live.push([task.speedBps, task.fileProgress]);
+      }
+    });
+    scheduler.start();
+
+    const task = scheduler.enqueue('transfer', {}, label);
+    expect(task.speedBps).toBeNull();
+    const finished = await waitForTask(scheduler, task.id);
+
+    expect(live).toEqual([
+      [null, null],
+      [null, 0],
+      [4_000_000, 0.8],
+      [1_000_000, 1],
+      [1_000_000, null],
+    ]);
+    expect(finished.speedBps).toBe(2_500_000);
+    await scheduler.stop();
+  });
+
+  it('has no speed when nothing was transferred', async () => {
+    const scheduler = new Scheduler(1, 10, logger);
+    scheduler.register('cached', async (_args, context) => {
+      context.reportTransfer({ bytes: 0, elapsedMs: 0, fraction: null });
+      return [];
+    });
+    scheduler.start();
+
+    const task = scheduler.enqueue('cached', {}, label);
+    const finished = await waitForTask(scheduler, task.id);
+
+    expect(finished.speedBps).toBeNull();
+    await scheduler.stop();
+  });
+
   it('marks a task as failed when the handler throws', async () => {
     const scheduler = new Scheduler(1, 10, logger);
     scheduler.register('fail', async () => {

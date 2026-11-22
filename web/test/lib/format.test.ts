@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatClockTime, formatDate, formatFileSize, formatIndex, pluralize } from '../../src/lib/format';
+import {
+  formatBitRate,
+  formatClockTime,
+  formatDate,
+  formatFileSize,
+  formatIndex,
+  pluralize,
+} from '../../src/lib/format';
 
 describe('pluralize', () => {
   it('adds an "s" unless there is exactly one', () => {
@@ -12,6 +19,15 @@ describe('pluralize', () => {
   it('accepts an irregular plural', () => {
     expect(pluralize(1, 'entry', 'entries')).toBe('1 entry');
     expect(pluralize(3, 'entry', 'entries')).toBe('3 entries');
+  });
+});
+
+describe('formatBitRate', () => {
+  it('shows bytes per second as decimal bits per second', () => {
+    expect(formatBitRate(100)).toBe('800 bps');
+    expect(formatBitRate(125)).toBe('1.0 Kbps');
+    expect(formatBitRate(7_787_500)).toBe('62.3 Mbps');
+    expect(formatBitRate(250_000_000)).toBe('2.0 Gbps');
   });
 });
 

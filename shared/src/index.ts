@@ -60,6 +60,8 @@ export interface QueueTask extends TaskMedia {
   source: TaskSource;
   kind: TaskKind;
   sizeBytes: number;
+  speedBps: number | null;
+  fileProgress: number | null;
   args: Record<string, unknown>;
   state: TaskState;
   result: string[] | null;

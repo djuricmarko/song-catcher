@@ -159,6 +159,8 @@ export function makeTask(overrides: Partial<QueueTask> = {}): QueueTask {
     subtitle: null,
     date: null,
     sizeBytes: 0,
+    speedBps: null,
+    fileProgress: null,
     args: {},
     state: 'waiting',
     result: null,

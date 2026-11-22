@@ -109,6 +109,7 @@ describe('Sidebar queue', () => {
         state: 'mission accomplished',
         result: ['/music/youtube-dl/Pantera - Walk.mp3'],
         sizeBytes: 49 * 1024 * 1024,
+        speedBps: 7_787_500,
       }),
     ]);
     await userEvent.click(screen.getByRole('button', { name: /Completed/ }));
@@ -126,6 +127,7 @@ describe('Sidebar queue', () => {
     expect(card).toHaveTextContent('yt-dlp');
     expect(card).toHaveTextContent('.mp3');
     expect(card).toHaveTextContent('49.0 MB');
+    expect(card).toHaveTextContent('62.3 Mbps');
   });
 
   it('shows progress, skipped songs and the failure of a collection', async () => {
@@ -161,14 +163,16 @@ describe('Sidebar queue', () => {
     expect(card).toHaveTextContent('Deezer said no');
   });
 
-  it('fills a progress ring for a running collection and spins for a single track', () => {
+  it('fills a progress ring by songs for a collection, by bytes for a single file, and spins otherwise', () => {
     renderSidebar([
-      makeTask({ id: 1, kind: 'album', state: 'active', progress: [3, 12] }),
-      makeTask({ id: 2, state: 'active', progress: [0, 1] }),
+      makeTask({ id: 1, kind: 'album', state: 'active', progress: [3, 12], fileProgress: 0.9 }),
+      makeTask({ id: 2, state: 'active', progress: [0, 1], fileProgress: 0.4 }),
+      makeTask({ id: 3, source: 'youtube', state: 'active', fileProgress: null }),
     ]);
-    const arcs = document.querySelectorAll('.ring circle:last-child');
-    expect(arcs).toHaveLength(1);
-    expect(arcs[0]).toHaveAttribute('stroke-dasharray', '25 100');
+    const arcs = [...document.querySelectorAll('.ring circle:last-child')].map((arc) =>
+      arc.getAttribute('stroke-dasharray'),
+    );
+    expect(arcs.sort()).toEqual(['25 100', '40 100']);
     expect(document.querySelectorAll('.spinner')).toHaveLength(1);
   });
 });

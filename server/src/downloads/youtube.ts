@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { childEnvironment, childStderr, wasKilled } from '../lib/child-process.js';
 import { errorMessage } from '../lib/errors.js';
+import { cumulativeTransfer, type TransferReporter } from '../lib/transfer.js';
 
 export class YoutubeDlError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -22,6 +23,7 @@ export interface YoutubeDlOptions {
   proxyUrl?: string;
   timeoutMs?: number;
   onInfo?: ((info: YoutubeVideoInfo) => void) | undefined;
+  onTransfer?: TransferReporter | undefined;
 }
 
 export interface YoutubeVideoInfo {
@@ -85,6 +87,15 @@ export function parseYtDlpInfo(line: string): YoutubeVideoInfo | undefined {
   return { title, uploadDate: date ? `${date[1]}-${date[2]}-${date[3]}` : undefined };
 }
 
+export function parseYtDlpTransfer(line: string): { transferred: number; total: number | undefined } | undefined {
+  const match = /^\[transfer] ([\d.]+) ([\d.]+|NA)$/.exec(line);
+  if (!match) {
+    return undefined;
+  }
+  const total = Number(match[2]);
+  return { transferred: Number(match[1]), total: total > 0 ? total : undefined };
+}
+
 async function runYtDlp(
   executable: string,
   args: string[],
@@ -99,8 +110,12 @@ async function runYtDlp(
       timeout: timeoutMs,
       killSignal: 'SIGKILL',
     });
-    if (onLine && running.child.stdout) {
-      createInterface({ input: running.child.stdout }).on('line', onLine);
+    if (onLine) {
+      for (const output of [running.child.stdout, running.child.stderr]) {
+        if (output) {
+          createInterface({ input: output }).on('line', onLine);
+        }
+      }
     }
     return await running;
   } catch (error) {
@@ -135,6 +150,12 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     '--print',
     'after_move:filepath',
     '--no-simulate',
+    '--progress',
+    '--newline',
+    '--progress-template',
+    'download:[transfer] %(progress.downloaded_bytes)s %(progress.total_bytes,total_bytes_estimate)s',
+    '--progress-template',
+    'postprocess:[convert] %(progress.postprocessor)s',
     // A watch URL with &list=... would otherwise download the whole playlist,
     // but only the last file is reported back.
     '--no-playlist',
@@ -146,19 +167,29 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
   }
   pushTargetArguments(args, options);
 
-  const { onInfo } = options;
+  const { onInfo, onTransfer } = options;
+  const track = onTransfer && cumulativeTransfer(onTransfer);
   const { stdout, stderr } = await runYtDlp(
     options.executable,
     args,
     options.timeoutMs ?? 30 * 60_000,
     16 * 1024 * 1024,
-    onInfo &&
-      ((line) => {
-        const info = parseYtDlpInfo(line.trim());
-        if (info) {
-          onInfo(info);
-        }
-      }),
+    (line) => {
+      const trimmed = line.trim();
+      const transfer = parseYtDlpTransfer(trimmed);
+      if (transfer) {
+        track?.(transfer.transferred, transfer.total);
+        return;
+      }
+      if (trimmed.startsWith('[convert] ')) {
+        onTransfer?.({ bytes: 0, elapsedMs: 0, fraction: null });
+        return;
+      }
+      const info = parseYtDlpInfo(trimmed);
+      if (info) {
+        onInfo?.(info);
+      }
+    },
   );
 
   const filename = parseYtDlpOutput(stdout);
