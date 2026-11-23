@@ -35,11 +35,23 @@ function isAbsolutePath(line: string): boolean {
   return line.startsWith('/') || /^[A-Za-z]:\\/.test(line);
 }
 
+function jsonString(line: string): string | undefined {
+  if (!line.startsWith('"')) {
+    return undefined;
+  }
+  try {
+    const value: unknown = JSON.parse(line);
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function parseYtDlpOutput(stdout: string): string | undefined {
   const printedPath = stdout
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .findLast((line) => line.endsWith('.mp3') && isAbsolutePath(line));
+    .map((line) => jsonString(line.trim()))
+    .findLast((line) => line?.endsWith('.mp3') && isAbsolutePath(line));
   if (printedPath) {
     return printedPath;
   }
@@ -148,7 +160,8 @@ export async function downloadWithYtDlp(options: YoutubeDlOptions): Promise<stri
     '--print',
     'before_dl:%(.{title,upload_date})j',
     '--print',
-    'after_move:filepath',
+    // Escaped to ASCII, so the console code page on Windows cannot drop or garble characters of the path.
+    'after_move:%(filepath)j',
     '--no-simulate',
     '--progress',
     '--newline',

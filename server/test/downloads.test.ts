@@ -206,7 +206,11 @@ describe('DownloadService', () => {
 
 describe('yt-dlp wrapper', () => {
   it('parses the printed output path', () => {
-    expect(parseYtDlpOutput('some log\n/tmp/video.mp3\n')).toBe('/tmp/video.mp3');
+    expect(parseYtDlpOutput('some log\n"/tmp/video.mp3"\n')).toBe('/tmp/video.mp3');
+    expect(parseYtDlpOutput(String.raw`"C:\\Music\\Ambience \u2022 Gryffindor \uff5c 4 hours.mp3"` + '\r\n')).toBe(
+      'C:\\Music\\Ambience • Gryffindor ｜ 4 hours.mp3',
+    );
+    expect(parseYtDlpOutput('/tmp/video.mp3\n')).toBeUndefined();
     expect(parseYtDlpOutput('[ExtractAudio] Destination: /tmp/video.mp3\n')).toBe('/tmp/video.mp3');
   });
 
@@ -249,7 +253,7 @@ printf '%s\\n' '{"title": "Video", "upload_date": "20240930"}'
 printf '%s\\n' '[transfer] 1024 5120' '[transfer] 5120 5120' '[transfer] 5120 5120'
 printf '%s\\n' '[convert] ExtractAudio' >&2
 printf 'audio' > "$out"
-printf '%s\\n' "$out"
+printf '"%s"\\n' "$out"
 `,
     );
     await chmod(scriptPath, 0o755);
@@ -284,7 +288,7 @@ printf '%s\\n' "$out"
       `#!/bin/sh
 for arg in "$@"; do printf '%s\\n' "$arg" >> "${argsFile}"; done
 printf 'audio' > "${baseDirectory}/v.mp3"
-printf '%s\\n' "${baseDirectory}/v.mp3"
+printf '"%s"\\n' "${baseDirectory}/v.mp3"
 `,
     );
     await chmod(scriptPath, 0o755);
@@ -308,7 +312,7 @@ printf '%s\\n' "${baseDirectory}/v.mp3"
       `#!/bin/sh
 for arg in "$@"; do printf '%s\\n' "$arg" >> "${argsFile}"; done
 printf 'audio' > "${baseDirectory}/p.mp3"
-printf '%s\\n' "${baseDirectory}/p.mp3"
+printf '"%s"\\n' "${baseDirectory}/p.mp3"
 `,
     );
     await chmod(scriptPath, 0o755);
@@ -499,7 +503,7 @@ fi
 # yt-dlp reads %% in the output template as a literal percent sign.
 directory=$(printf '%s' "\${out%/*}" | sed 's/%%/%/g')
 printf 'audio' > "$directory/$name.mp3"
-printf '%s\\n' "$directory/$name.mp3"
+printf '"%s"\\n' "$directory/$name.mp3"
 `,
     );
     await chmod(scriptPath, 0o755);
